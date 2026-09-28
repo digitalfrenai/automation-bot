@@ -8,6 +8,9 @@ import {
   scaffoldMapKey,
 } from "@/lib/scaffold-page-map";
 import { assignWordPressReadingSettings } from "@/lib/wordpress-page-roles";
+import { trashDuplicateScaffoldPages } from "@/lib/wordpress-page-cleanup";
+import { syncPrimaryNavigationMenu } from "@/lib/wordpress-menu-sync";
+import { loadThemeStyleProfile } from "@/lib/theme-style-profile";
 import {
   fetchAllWpPages,
   fetchWordPressReadingPageIds,
@@ -29,6 +32,8 @@ export async function executePhase1(
   const storedMap = parseScaffoldPageMap(config.scaffoldPageIds);
 
   log.info("Phase 1: configuring WordPress site settings…", { phase: "phase1" });
+
+  await loadThemeStyleProfile(config, onLog);
 
   try {
     await wpRequest(config, "/wp-json/wp/v2/settings", {
@@ -68,7 +73,7 @@ export async function executePhase1(
       );
       if (duplicates.length > 0) {
         log.warn(
-          `Page "${title}" has ${duplicates.length + 1} WordPress match(es); reusing id ${found.id} (also: ${duplicates.map((p) => p.id).join(", ")}). Delete extras in WP admin if needed.`,
+          `Page "${title}" has ${duplicates.length + 1} WordPress match(es); reusing id ${found.id} (also: ${duplicates.map((p) => p.id).join(", ")}). Extras will be trashed after scaffold.`,
           { phase: "phase1", pageTitle: title, pageId: found.id }
         );
       } else {
@@ -117,7 +122,9 @@ export async function executePhase1(
   }
 
   await saveScaffoldPageMap(configId, updatedMap);
+  await trashDuplicateScaffoldPages(config, existing, onLog);
   await assignWordPressReadingSettings(config, results, onLog);
+  await syncPrimaryNavigationMenu(config, results, onLog);
 
   log.info(`Phase 1 complete: ${results.length} page(s) ready.`, { phase: "phase1" });
   return results;

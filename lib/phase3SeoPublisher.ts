@@ -11,6 +11,7 @@ import {
 } from "@/lib/wordpress-page-roles";
 import { runSeoAudit, truncateMeta } from "@/lib/seo-audit";
 import { replaceWordPressPageContent } from "@/lib/wordpress-page-content";
+import { pageDisplayTitle } from "@/lib/page-display-title";
 import { wpRequest, type WpPage } from "@/lib/wordpress-client";
 
 export async function executePhase3(
@@ -53,13 +54,14 @@ export async function executePhase3(
   const seoTitle = truncateMeta(seo.seo_title, 60);
   const metaDescription = truncateMeta(seo.meta_description, 160);
   const scaffoldTitle = pageMeta?.scaffoldTitle?.trim() || pageTitle;
+  const wpTitle = pageDisplayTitle(scaffoldTitle);
   const existingSlug = pageMeta?.slug ?? "";
   const slug = publishSlugForPage(scaffoldTitle, existingSlug, seo.slug);
 
   const publishBody: Record<string, unknown> = {
     status: "publish",
     slug,
-    title: seoTitle,
+    title: wpTitle,
     excerpt: metaDescription,
     meta: {
       _yoast_wpseo_title: seoTitle,
@@ -97,7 +99,7 @@ export async function executePhase3(
         body: JSON.stringify({
           status: "publish",
           slug,
-          title: seoTitle,
+          title: wpTitle,
           excerpt: metaDescription,
         }),
       }

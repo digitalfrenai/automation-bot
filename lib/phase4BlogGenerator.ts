@@ -80,7 +80,7 @@ Tone: ${brief.toneOfVoice}
 Services: ${brief.coreServices.join(", ") || "N/A"}
 Related keywords: ${brief.targetKeywords.join(", ") || "N/A"}
 
-Produce SEO-friendly structured HTML with headings, links, and image alt text.`;
+Use article-style layout inside the theme content width (no full-bleed heroes or viewport breakout CSS). Headings, links, and image alt text.`;
 }
 
 function parseTopics(text: string, limit: number): BlogTopic[] {

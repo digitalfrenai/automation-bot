@@ -6,6 +6,7 @@ import { executePhase3 } from "@/lib/phase3SeoPublisher";
 import type { PipelineLogEntry } from "@/lib/pipeline-types";
 import { deployThemeZip } from "@/lib/themeDeployer";
 import { SINGLE_CONFIG_ID } from "@/lib/site-config";
+import { syncPrimaryNavigationMenu } from "@/lib/wordpress-menu-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,6 +112,9 @@ export async function POST(request: NextRequest) {
               }
             );
           }
+
+          const siteConfig = await loadSiteConfig(configId);
+          await syncPrimaryNavigationMenu(siteConfig, pages, onLog);
 
           await updateSiteStatus(configId, "COMPLETED");
           push({

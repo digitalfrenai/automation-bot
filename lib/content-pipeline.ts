@@ -13,6 +13,7 @@ import {
   htmlToGutenbergBlocks,
   normalizeGutenbergContent,
 } from "@/lib/gutenberg-content";
+import { normalizeContentBounds } from "@/lib/content-layout-normalize";
 import { countChromeIssues, normalizePageHtml } from "@/lib/page-content-html";
 import {
   parseStructuredPagePayload,
@@ -113,14 +114,15 @@ export function prepareContentFromGrok(
         { phase: (context?.phase as "phase2") ?? "phase2", pageTitle: context?.pageTitle }
       );
     }
+    const bounded = normalizeContentBounds(blocks);
     return {
       format,
-      storage: { format: "gutenberg", html: blocks },
-      auditHtml: gutenbergToAuditHtml(blocks),
+      storage: { format: "gutenberg", html: bounded },
+      auditHtml: gutenbergToAuditHtml(bounded),
     };
   }
 
-  const html = normalizePageHtml(cleaned);
+  const html = normalizeContentBounds(normalizePageHtml(cleaned));
   const chromeCount = countChromeIssues(cleaned);
   if (chromeCount > 0) {
     log.warn(
@@ -189,18 +191,21 @@ export function prepareSeoCorrectedContent(
     }
   }
   if (format === "gutenberg") {
-    const blocks = hasGutenbergBlocks(cleaned)
-      ? normalizeGutenbergContent(cleaned)
-      : htmlToGutenbergBlocks(cleaned);
+    const blocks = normalizeContentBounds(
+      hasGutenbergBlocks(cleaned)
+        ? normalizeGutenbergContent(cleaned)
+        : htmlToGutenbergBlocks(cleaned)
+    );
     return {
       format,
       storage: { format: "gutenberg", html: blocks },
       auditHtml: gutenbergToAuditHtml(blocks),
     };
   }
+  const html = normalizeContentBounds(normalizePageHtml(cleaned));
   return {
     format: "html",
-    storage: { format: "html", html: normalizePageHtml(cleaned) },
-    auditHtml: normalizePageHtml(cleaned),
+    storage: { format: "html", html },
+    auditHtml: html,
   };
 }

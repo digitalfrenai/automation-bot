@@ -3,6 +3,7 @@ import {
   hasGutenbergBlocks,
   normalizeGutenbergContent,
 } from "@/lib/gutenberg-content";
+import { normalizeContentBounds } from "@/lib/content-layout-normalize";
 import { normalizePageHtml } from "@/lib/page-content-html";
 import type { WordPressContentWrite } from "@/lib/wordpress-page-content";
 import { wpRequest, type WpPost } from "@/lib/wordpress-client";
@@ -15,12 +16,12 @@ export type WordPressPostWrite = WordPressContentWrite;
 
 function normalizeForWrite(write: WordPressPostWrite): string {
   if (write.format === "gutenberg") {
-    return normalizeGutenbergContent(write.html);
+    return normalizeContentBounds(normalizeGutenbergContent(write.html));
   }
   if (write.format === "divi" || write.format === "elementor") {
     return write.html.trim();
   }
-  return normalizePageHtml(write.html);
+  return normalizeContentBounds(normalizePageHtml(write.html));
 }
 
 /**

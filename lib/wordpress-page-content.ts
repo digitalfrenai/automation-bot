@@ -4,6 +4,7 @@ import {
   hasGutenbergBlocks,
   normalizeGutenbergContent,
 } from "@/lib/gutenberg-content";
+import { normalizeContentBounds } from "@/lib/content-layout-normalize";
 import { normalizePageHtml } from "@/lib/page-content-html";
 import { wpRequest, type WpPage } from "@/lib/wordpress-client";
 
@@ -19,12 +20,12 @@ export type WordPressContentWrite = {
 
 function normalizeForWrite(write: WordPressContentWrite): string {
   if (write.format === "gutenberg") {
-    return normalizeGutenbergContent(write.html);
+    return normalizeContentBounds(normalizeGutenbergContent(write.html));
   }
   if (write.format === "divi" || write.format === "elementor") {
     return write.html.trim();
   }
-  return normalizePageHtml(write.html);
+  return normalizeContentBounds(normalizePageHtml(write.html));
 }
 
 /**

@@ -4,7 +4,18 @@ import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import type { ContentFormat } from "@/lib/content-format";
 import { detectThemeSlugFromZip, resolveLocalThemePath } from "@/lib/themeDeployer";
-import { normalizeWpUrl, wpRequest } from "@/lib/wordpress-client";
+import { normalizeWpUrl } from "@/lib/wordpress-client";
+import {
+  fetchActiveThemeRecord,
+  fetchFrontPageBlockSample,
+  fetchGlobalStylesJson,
+  fetchPublicThemeJson,
+  fetchRenderedEntryContentSnippet,
+  fetchThemeBlockPatternSample,
+  pickBestReferenceMarkup,
+  summarizeBlockStructure,
+  themeBrandLayoutHints,
+} from "@/lib/wordpress-theme-introspection";
 
 export type ThemePaletteSwatch = {
   name: string;
@@ -25,6 +36,11 @@ export type ThemeStyleProfile = {
   headingClasses: string[];
   otherClasses: string[];
   notes: string[];
+  /** Live WordPress block/pattern sample to mirror (from active theme). */
+  referenceMarkup?: string;
+  referenceMarkupSource?: string;
+  structureSummary?: string;
+  layoutHints: string[];
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -67,6 +83,7 @@ function emptyProfile(): ThemeStyleProfile {
     headingClasses: [],
     otherClasses: [],
     notes: [],
+    layoutHints: [],
   };
 }
 
@@ -275,28 +292,14 @@ function addNote(profile: ThemeStyleProfile, note: string) {
 
 async function fetchActiveThemeMeta(
   config: LoadedSiteConfig
-): Promise<{ name?: string; stylesheet?: string }> {
-  try {
-    const themes = await wpRequest<
-      Array<{
-        stylesheet?: string;
-        status?: string;
-        name?: { rendered?: string } | string;
-      }>
-    >(config, "/wp-json/wp/v2/themes?status=active");
-
-    const active = Array.isArray(themes)
-      ? themes.find((t) => t.status === "active") ?? themes[0]
-      : undefined;
-    if (!active) return {};
-    const name =
-      typeof active.name === "string"
-        ? active.name
-        : active.name?.rendered;
-    return { name, stylesheet: active.stylesheet };
-  } catch {
-    return {};
-  }
+): Promise<{ name?: string; stylesheet?: string; isBlockTheme?: boolean }> {
+  const record = await fetchActiveThemeRecord(config);
+  if (!record) return {};
+  return {
+    name: record.name,
+    stylesheet: record.stylesheet,
+    isBlockTheme: record.isBlockTheme,
+  };
 }
 
 async function fetchLiveThemeCss(wpUrl: string): Promise<string> {
@@ -314,7 +317,7 @@ async function fetchLiveThemeCss(wpUrl: string): Promise<string> {
       .map((tag) => tag[0].match(/href=["']([^"']+)["']/i)?.[1])
       .filter((href): href is string => Boolean(href))
       .filter((href) => /wp-content\/themes\//i.test(href))
-      .slice(0, 3);
+      .slice(0, 8);
 
     const chunks: string[] = [];
     for (const href of hrefs) {
@@ -347,22 +350,66 @@ function mergeProfiles(
   live: ThemeStyleProfile | null
 ): ThemeStyleProfile {
   if (zip && live) {
+    const liveIsAuthoritative =
+      Boolean(live.themeSlug) &&
+      Boolean(zip.themeSlug) &&
+      live.themeSlug !== zip.themeSlug;
+
+    const notes = mergeUnique([zip.notes, live.notes], 10);
+    if (liveIsAuthoritative) {
+      notes.unshift(
+        `Active WordPress theme is "${live.themeSlug}" (uploaded zip was "${zip.themeSlug}") — styling follows LIVE theme.`
+      );
+    }
+
     return {
       source: "combined",
-      themeName: zip.themeName || live.themeName,
-      themeSlug: zip.themeSlug || live.themeSlug,
-      isBlockTheme: zip.isBlockTheme || live.isBlockTheme,
+      themeName: liveIsAuthoritative
+        ? live.themeName || zip.themeName
+        : zip.themeName || live.themeName,
+      themeSlug: liveIsAuthoritative
+        ? live.themeSlug || zip.themeSlug
+        : zip.themeSlug || live.themeSlug,
+      isBlockTheme: live.isBlockTheme || zip.isBlockTheme,
       palette: mergeUnique(
-        [zip.palette.map((p) => JSON.stringify(p)), live.palette.map((p) => JSON.stringify(p))],
+        [
+          live.palette.map((p) => JSON.stringify(p)),
+          zip.palette.map((p) => JSON.stringify(p)),
+        ],
         24
       ).map((s) => JSON.parse(s) as ThemePaletteSwatch),
-      fonts: mergeUnique([zip.fonts, live.fonts], 8),
-      cssVariables: mergeUnique([zip.cssVariables, live.cssVariables], 40),
-      layoutClasses: mergeUnique([zip.layoutClasses, live.layoutClasses], MAX_PROMPT_CLASSES),
-      buttonClasses: mergeUnique([zip.buttonClasses, live.buttonClasses], 12),
-      headingClasses: mergeUnique([zip.headingClasses, live.headingClasses], 12),
-      otherClasses: mergeUnique([zip.otherClasses, live.otherClasses], 20),
-      notes: mergeUnique([zip.notes, live.notes], 8),
+      fonts: mergeUnique([live.fonts, zip.fonts], 8),
+      cssVariables: mergeUnique([live.cssVariables, zip.cssVariables], 40),
+      layoutClasses: mergeUnique(
+        liveIsAuthoritative
+          ? [live.layoutClasses, zip.layoutClasses]
+          : [zip.layoutClasses, live.layoutClasses],
+        MAX_PROMPT_CLASSES
+      ),
+      buttonClasses: mergeUnique(
+        liveIsAuthoritative
+          ? [live.buttonClasses, zip.buttonClasses]
+          : [zip.buttonClasses, live.buttonClasses],
+        12
+      ),
+      headingClasses: mergeUnique(
+        liveIsAuthoritative
+          ? [live.headingClasses, zip.headingClasses]
+          : [zip.headingClasses, live.headingClasses],
+        12
+      ),
+      otherClasses: mergeUnique(
+        liveIsAuthoritative
+          ? [live.otherClasses, zip.otherClasses]
+          : [zip.otherClasses, live.otherClasses],
+        20
+      ),
+      notes,
+      referenceMarkup: live.referenceMarkup || zip.referenceMarkup,
+      referenceMarkupSource:
+        live.referenceMarkupSource || zip.referenceMarkupSource,
+      structureSummary: live.structureSummary || zip.structureSummary,
+      layoutHints: mergeUnique([live.layoutHints, zip.layoutHints], 6),
     };
   }
   return zip ?? live ?? emptyProfile();
@@ -370,15 +417,44 @@ function mergeProfiles(
 
 function profileFromCss(
   css: string,
-  meta: { name?: string; stylesheet?: string }
+  meta: { name?: string; stylesheet?: string; isBlockTheme?: boolean }
 ): ThemeStyleProfile {
   const profile = emptyProfile();
   profile.source = "live";
   profile.themeName = meta.name;
   profile.themeSlug = meta.stylesheet;
+  profile.isBlockTheme = Boolean(meta.isBlockTheme);
   profile.cssVariables = extractCssVariables(css);
   applyClassInventory(profile, extractClassCounts(css), []);
+  profile.layoutHints = themeBrandLayoutHints(
+    meta.stylesheet ?? "",
+    meta.name
+  );
   return profile;
+}
+
+function attachReferenceMarkup(
+  profile: ThemeStyleProfile,
+  source: string,
+  markup: string
+) {
+  if (!markup.trim()) return;
+  profile.referenceMarkup = markup.trim();
+  profile.referenceMarkupSource = source;
+  profile.structureSummary = summarizeBlockStructure(markup);
+  const htmlClasses = extractHtmlClasses(markup).slice(0, 120);
+  if (htmlClasses.length) {
+    const counts = new Map<string, number>();
+    for (const name of [
+      ...profile.layoutClasses,
+      ...profile.buttonClasses,
+      ...profile.headingClasses,
+      ...htmlClasses,
+    ]) {
+      counts.set(name, (counts.get(name) ?? 0) + 4);
+    }
+    applyClassInventory(profile, counts, htmlClasses);
+  }
 }
 
 export function formatThemeStylePrompt(
@@ -420,10 +496,22 @@ Light inline CSS is allowed only for spacing and layout.`;
       ? `Other useful theme classes: ${profile.otherClasses.join(", ")}`
       : "",
     profile.notes.length ? `Notes: ${profile.notes.join(" ")}` : "",
+    profile.layoutHints.length
+      ? `Theme layout hints:\n${profile.layoutHints.map((h) => `- ${h}`).join("\n")}`
+      : "",
+    profile.structureSummary
+      ? `Reference structure (mirror this rhythm): ${profile.structureSummary}`
+      : "",
+    profile.referenceMarkup
+      ? `REFERENCE MARKUP FROM ${profile.referenceMarkupSource ?? "active theme"} (copy block types, nesting, align classes, and section rhythm — replace all text with new copy for this business):\n${profile.referenceMarkup.slice(0, 4800)}`
+      : "",
     contentFormat === "gutenberg"
       ? `RULES:
 - Use Gutenberg core blocks only; prefer wp-block-group / wp-block-columns for layout.
 - Apply has-* palette classes on groups, headings, and buttons when listed above.
+- Stay inside the theme content column: layout type "constrained" only — no align full/wide, no 100vw or negative-margin breakout CSS.
+- Colored sections: constrained wp:group with has-*-background-color (Astra/GeneratePress align copy with header width).
+- If REFERENCE MARKUP is provided, follow the same block sequence and layout classes; only change text, links, and headings.
 - Do NOT duplicate site header, footer, or navigation.`
       : contentFormat === "elementor" || contentFormat === "divi"
         ? `RULES:
@@ -468,14 +556,52 @@ export async function loadThemeStyleProfile(
   }
 
   const meta = await fetchActiveThemeMeta(config);
+  const stylesheet = meta.stylesheet ?? "";
+
   const liveCss = await fetchLiveThemeCss(config.wpUrl);
   if (liveCss.trim()) {
     liveProfile = profileFromCss(liveCss, meta);
   } else if (meta.name || meta.stylesheet) {
-    liveProfile = emptyProfile();
-    liveProfile.source = "live";
-    liveProfile.themeName = meta.name;
-    liveProfile.themeSlug = meta.stylesheet;
+    liveProfile = profileFromCss("", meta);
+  }
+
+  if (liveProfile && stylesheet) {
+    const themeJsonText = await fetchPublicThemeJson(config.wpUrl, stylesheet);
+    if (themeJsonText.trim()) {
+      ingestThemeJson(liveProfile, themeJsonText);
+      addNote(liveProfile, "Loaded theme.json from live WordPress theme directory.");
+    }
+
+    const globalStyles = await fetchGlobalStylesJson(config);
+    if (globalStyles.trim()) {
+      ingestThemeJson(liveProfile, globalStyles);
+      addNote(liveProfile, "Merged site global-styles palette from WordPress.");
+    }
+
+    const [patternSample, frontSample, renderedSample] = await Promise.all([
+      fetchThemeBlockPatternSample(config, stylesheet),
+      fetchFrontPageBlockSample(config),
+      fetchRenderedEntryContentSnippet(config.wpUrl),
+    ]);
+
+    const reference = pickBestReferenceMarkup([
+      { source: "theme block pattern", markup: patternSample },
+      { source: "current front page blocks", markup: frontSample },
+      { source: "rendered entry-content", markup: renderedSample },
+    ]);
+
+    if (reference) {
+      attachReferenceMarkup(liveProfile, reference.source, reference.markup);
+      addNote(
+        liveProfile,
+        `Using ${reference.source} as layout reference for generation.`
+      );
+    } else {
+      addNote(
+        liveProfile,
+        "No block pattern or front-page reference found — using CSS class profile only."
+      );
+    }
   }
 
   const profile = mergeProfiles(zipProfile, liveProfile);
@@ -485,8 +611,11 @@ export async function loadThemeStyleProfile(
       { phase: "setup" }
     );
   } else {
+    const refNote = profile.referenceMarkupSource
+      ? `, reference: ${profile.referenceMarkupSource}`
+      : "";
     log.info(
-      `Theme style profile loaded (${profile.source}) for "${profile.themeName || profile.themeSlug || "theme"}" — ${profile.layoutClasses.length} layout class(es), ${profile.buttonClasses.length} button class(es).`,
+      `Theme style profile loaded (${profile.source}) for "${profile.themeName || profile.themeSlug || "theme"}" — ${profile.layoutClasses.length} layout class(es), ${profile.buttonClasses.length} button class(es)${refNote}.`,
       { phase: "setup" }
     );
   }

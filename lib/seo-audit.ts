@@ -34,7 +34,8 @@ Analyze HTML against target keywords and return ONLY a JSON object with this exa
   "simple_fixes_applied": ["short description of each auto-fix"]
 }
 Rules:
-- seo_title max 60 characters.
+- seo_title max 60 characters — for SEO plugins and browser tabs ONLY; never copy seo_title verbatim into visible H1/H2 text.
+- Visible H1 must be a short marketing headline (no pipe-separated keyword lists like "Brand | Service | City").
 - meta_description max 160 characters.
 - Ensure exactly one H1 and logical H2/H3 hierarchy when validation_passed is false.
 - Ensure every <img> has meaningful alt text in corrected_html when applicable.

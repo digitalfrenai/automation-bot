@@ -183,11 +183,21 @@ Allowed core blocks only:
 wp:group, wp:columns, wp:column, wp:heading, wp:paragraph, wp:buttons, wp:button, wp:list, wp:image, wp:separator, wp:quote, wp:spacer
 
 Rules:
-- Use wp:group with layout constrained or full-width for sections.
+- Use wp:group with layout {"type":"constrained"} ONLY — never align full/wide (content must stay inside the theme content column).
 - Exactly one wp:heading level 1 for pages; blog posts use one H1 at top.
 - Prefer theme palette classes on groups/buttons when known: ${themeGuide.includes("Palette") ? "use has-*-background-color / has-*-color from theme guide" : "use sensible block styles"}.
 - No Elementor/Divi shortcodes, no third-party block namespaces.
+- No inline style attributes for width, margin, or position. No 100vw, calc(), or breakout CSS.
 - Complete replacement content on each run — do not append duplicate heroes.
+
+DESIGN CONSISTENCY (required — match active theme spacing, not a plain document):
+- Every section is a constrained wp:group (alternate has-*-background-color for band sections — background stays inside content width).
+- Hero: constrained group with has-*-background-color → inner H1 + lead paragraph + wp:buttons (primary + secondary).
+- For colored bands: nested pattern only if needed — outer constrained group with background, never viewport breakout.
+- Services/benefits: wp:columns with 2–4 wp:column cards (each column: H3 + short paragraph).
+- Do NOT output long runs of bare wp:paragraph blocks without group/column wrappers.
+- Visible headings are human-readable (e.g. "How we work") — NEVER SEO title strings with pipes (|).
+- Reuse the same button block style and section padding pattern across all sections on the page.
 
 ${themeGuide}`;
 }
@@ -201,6 +211,7 @@ CRITICAL — WordPress theme context:
 - Output ONLY the main page body that belongs in the editor content area (between header and footer).
 - Do NOT include <header>, <footer>, <nav>, site-wide menus, logo bars, copyright bars, or duplicate CTAs that belong in the theme chrome.
 - Use <section> for heroes and content blocks — never wrap the page in <header> or <footer>.
+- Do NOT use width:100vw, negative margins, or CSS that breaks out of the content column. No inline width/margin styles.
 
 ${themeGuide}
 

@@ -15,6 +15,9 @@ import {
 
 export type GenerationContext = ContentFormatContext & {
   themeGuide: string;
+  /** Full theme reference markup for template-fill (structure locked, text swapped). */
+  templateMarkup?: string;
+  templateMarkupSource?: string;
 };
 
 export async function loadGenerationContext(
@@ -24,7 +27,12 @@ export async function loadGenerationContext(
   const themeProfile = await loadThemeStyleProfile(config, onLog);
   const formatCtx = await detectContentFormat(config, themeProfile, onLog);
   const themeGuide = formatThemeStylePrompt(themeProfile, formatCtx.format);
-  return { ...formatCtx, themeGuide };
+  return {
+    ...formatCtx,
+    themeGuide,
+    templateMarkup: themeProfile.referenceMarkup,
+    templateMarkupSource: themeProfile.referenceMarkupSource,
+  };
 }
 
 export function buildPageSystemPrompt(
@@ -48,10 +56,11 @@ export function buildBlogSystemPrompt(
   if (format === "gutenberg") {
     return `${buildGutenbergSystemPrompt(themeGuide)}
 
-Blog structure:
+Blog structure (article layout — NOT a landing page):
 - Exactly one H1 at the top (wp:heading level 1).
 - Multiple H2 sections with H3 subheads where useful.
-- Intro, body, takeaways, closing CTA block.
+- Constrained wp:group sections only — no align full/wide, no viewport breakout CSS.
+- Intro, body, takeaways, closing CTA block (simple group + buttons, same content width as body text).
 - Every wp:image must include alt text.
 - Add 2–4 internal links (/about, /services, /contact).
 ${includeExternal ? "- Add 1–2 reputable external links with rel=\"noopener noreferrer\" target=\"_blank\"." : "- Do not add external links."}
