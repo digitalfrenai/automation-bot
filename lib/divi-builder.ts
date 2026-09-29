@@ -25,8 +25,21 @@ ${modules}
 [/et_pb_section]`;
 }
 
+function imageModule(url: string, alt: string): string {
+  return `[et_pb_image src="${escapeShortcodeAttr(url)}" alt="${escapeShortcodeAttr(alt)}" title_text="${escapeShortcodeAttr(alt)}" show_in_lightbox="off" align="center" force_fullwidth="off"]`;
+}
+
 function sectionFromPageSection(block: PageSection): string {
   const parts: string[] = [];
+
+  if (block.image_url?.trim()) {
+    parts.push(
+      imageModule(
+        block.image_url.trim(),
+        block.image_alt?.trim() || block.heading || "Page image"
+      )
+    );
+  }
 
   if (block.heading) {
     const tag = block.kind === "hero" ? "h1" : "h2";
@@ -69,4 +82,30 @@ export function diviToAuditHtml(shortcodes: string): string {
     .replace(/\[\/?et_pb_[^\]]+\]/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export type DiviPageImageInjection = {
+  media: { id: number; source_url: string };
+  alt: string;
+  role: "hero" | "section";
+};
+
+export function injectImagesIntoDiviHtml(
+  shortcodes: string,
+  images: DiviPageImageInjection[]
+): string {
+  if (images.length === 0) return shortcodes;
+  const hero = images.find((i) => i.role === "hero") ?? images[0];
+  const rest = images.filter((i) => i !== hero);
+  const ordered = [hero, ...rest];
+
+  let sectionIndex = 0;
+  return shortcodes.replace(
+    /(\[et_pb_column type="4_4"\])/gi,
+    (match) => {
+      const img = ordered[sectionIndex++];
+      if (!img) return match;
+      return `${match}\n${imageModule(img.media.source_url, img.alt)}`;
+    }
+  );
 }

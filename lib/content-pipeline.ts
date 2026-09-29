@@ -14,6 +14,7 @@ import {
   normalizeGutenbergContent,
 } from "@/lib/gutenberg-content";
 import { normalizeContentBounds } from "@/lib/content-layout-normalize";
+import { normalizeContentButtons } from "@/lib/content-button-normalize";
 import { countChromeIssues, normalizePageHtml } from "@/lib/page-content-html";
 import {
   parseStructuredPagePayload,
@@ -114,7 +115,7 @@ export function prepareContentFromGrok(
         { phase: (context?.phase as "phase2") ?? "phase2", pageTitle: context?.pageTitle }
       );
     }
-    const bounded = normalizeContentBounds(blocks);
+    const bounded = normalizeContentButtons(normalizeContentBounds(blocks));
     return {
       format,
       storage: { format: "gutenberg", html: bounded },
@@ -122,7 +123,9 @@ export function prepareContentFromGrok(
     };
   }
 
-  const html = normalizeContentBounds(normalizePageHtml(cleaned));
+  const html = normalizeContentButtons(
+    normalizeContentBounds(normalizePageHtml(cleaned))
+  );
   const chromeCount = countChromeIssues(cleaned);
   if (chromeCount > 0) {
     log.warn(
@@ -191,10 +194,12 @@ export function prepareSeoCorrectedContent(
     }
   }
   if (format === "gutenberg") {
-    const blocks = normalizeContentBounds(
-      hasGutenbergBlocks(cleaned)
-        ? normalizeGutenbergContent(cleaned)
-        : htmlToGutenbergBlocks(cleaned)
+    const blocks = normalizeContentButtons(
+      normalizeContentBounds(
+        hasGutenbergBlocks(cleaned)
+          ? normalizeGutenbergContent(cleaned)
+          : htmlToGutenbergBlocks(cleaned)
+      )
     );
     return {
       format,
@@ -202,7 +207,9 @@ export function prepareSeoCorrectedContent(
       auditHtml: gutenbergToAuditHtml(blocks),
     };
   }
-  const html = normalizeContentBounds(normalizePageHtml(cleaned));
+  const html = normalizeContentButtons(
+    normalizeContentBounds(normalizePageHtml(cleaned))
+  );
   return {
     format: "html",
     storage: { format: "html", html },

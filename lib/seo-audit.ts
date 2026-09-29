@@ -40,6 +40,7 @@ Rules:
 - Ensure exactly one H1 and logical H2/H3 hierarchy when validation_passed is false.
 - Ensure every <img> has meaningful alt text in corrected_html when applicable.
 - Keep corrected_html concise: only fix heading hierarchy/H1/alt/link issues; do not rewrite the entire piece or add new sections.
+- NEVER remove <img> tags, wp:image blocks, or <figure class="page-hero-banner"> / page-section-image markup — copy them verbatim from the input HTML.
 ${formatNote}
 - No markdown, no prose outside JSON.`;
 }
@@ -101,6 +102,10 @@ function normalizeStorageHtml(html: string, format: ContentFormat): string {
   return normalizePageHtml(html);
 }
 
+function countImgTags(html: string): number {
+  return (html.match(/<img\b/gi) ?? []).length;
+}
+
 /** Prefer corrected HTML only when it looks like a surgical fix, not a full rewrite. */
 export function pickAuditedHtml(
   rawHtml: string,
@@ -121,6 +126,9 @@ export function pickAuditedHtml(
   }
 
   const prepared = prepareSeoCorrectedContent(seo.corrected_html, contentFormat);
+  if (countImgTags(prepared.storage.html) < countImgTags(baseline)) {
+    return baseline;
+  }
   return prepared.storage.html;
 }
 

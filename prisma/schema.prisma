@@ -31,6 +31,14 @@ model SiteConfig {
   sftpUsername       String?
   sftpPassword       String?
   businessName       String
+  /// External logo URL (optional if businessLogoFilePath is set)
+  businessLogoUrl    String?
+  /// Local upload path e.g. /uploads/logos/file.png
+  businessLogoFilePath String?
+  /// WordPress media ID after logo sync (cache)
+  wpLogoMediaId      Int?
+  /// JSON array of /uploads/design-references/… paths — Grok vision layout reference
+  designReferencePaths Json @default("[]")
   niche              String
   targetAudience     String
   toneOfVoice        String

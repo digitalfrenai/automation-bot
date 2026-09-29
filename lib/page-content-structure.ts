@@ -17,6 +17,10 @@ export type PageSection = {
   button_text?: string;
   button_url?: string;
   items?: Array<{ title: string; text: string }>;
+  /** Filled after AI image upload (Phase 2 enrichment). */
+  image_url?: string;
+  image_alt?: string;
+  image_media_id?: number;
 };
 
 export type StructuredPagePayload = {

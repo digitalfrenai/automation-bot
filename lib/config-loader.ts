@@ -3,11 +3,28 @@ import { prisma } from "@/lib/prisma";
 import { ensureSiteConfigJsonIntegrity } from "@/lib/repair-site-config";
 import { parseStringArray } from "@/lib/site-config";
 
-export type LoadedSiteConfig = SiteConfig & {
-  coreServicesList: string[];
-  targetKeywordsList: string[];
-  pagesToBuildList: string[];
+export type SiteLogoConfigFields = {
+  businessLogoUrl: string | null;
+  businessLogoFilePath: string | null;
+  wpLogoMediaId: number | null;
 };
+
+export type LoadedSiteConfig = SiteConfig &
+  SiteLogoConfigFields & {
+    designReferencePathsList: string[];
+    coreServicesList: string[];
+    targetKeywordsList: string[];
+    pagesToBuildList: string[];
+  };
+
+function readLogoFields(config: SiteConfig): SiteLogoConfigFields {
+  const row = config as SiteConfig & Partial<SiteLogoConfigFields>;
+  return {
+    businessLogoUrl: row.businessLogoUrl ?? null,
+    businessLogoFilePath: row.businessLogoFilePath ?? null,
+    wpLogoMediaId: row.wpLogoMediaId ?? null,
+  };
+}
 
 export async function loadSiteConfig(
   configId: string
@@ -19,8 +36,12 @@ export async function loadSiteConfig(
     throw new Error(`Site configuration not found for id "${configId}".`);
   }
 
+  const row = config as SiteConfig & { designReferencePaths?: unknown };
+
   return {
     ...config,
+    ...readLogoFields(config),
+    designReferencePathsList: parseStringArray(row.designReferencePaths),
     coreServicesList: parseStringArray(config.coreServices),
     targetKeywordsList: parseStringArray(config.targetKeywords),
     pagesToBuildList: parseStringArray(config.pagesToBuild),

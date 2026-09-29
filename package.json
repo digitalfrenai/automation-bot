@@ -9,7 +9,7 @@
     "start": "sh scripts/docker-entrypoint.sh",
     "start:server": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
+    "postinstall": "node scripts/postinstall-prisma.cjs",
     "db:push": "prisma db push",
     "db:studio": "prisma studio"
   },
@@ -21,6 +21,7 @@
     "openai": "^5.20.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "sharp": "^0.34.5",
     "ssh2": "^1.17.0",
     "ssh2-sftp-client": "^12.0.1"
   },

@@ -2,6 +2,7 @@ import type { LoadedSiteConfig } from "@/lib/config-loader";
 import {
   buildGutenbergSystemPrompt,
   buildHtmlSystemPrompt,
+  buildScreenshotLedHtmlSystemPrompt,
   detectContentFormat,
   type ContentFormat,
   type ContentFormatContext,
@@ -9,36 +10,67 @@ import {
 import type { LogSink } from "@/lib/pipeline-logger";
 import { buildStructuredPageJsonPrompt } from "@/lib/page-content-structure";
 import {
+  formatScreenshotLedThemeGuide,
+  isScreenshotLedDesignMode,
+} from "@/lib/design-reference-vision";
+import {
   formatThemeStylePrompt,
   loadThemeStyleProfile,
 } from "@/lib/theme-style-profile";
 
 export type GenerationContext = ContentFormatContext & {
   themeGuide: string;
+  screenshotLedDesign: boolean;
   /** Full theme reference markup for template-fill (structure locked, text swapped). */
   templateMarkup?: string;
   templateMarkupSource?: string;
 };
+
+function contentFormatEnvOverride(): ContentFormat | null {
+  const v = process.env.CONTENT_FORMAT?.trim().toLowerCase();
+  if (v === "html" || v === "gutenberg" || v === "elementor" || v === "divi") {
+    return v;
+  }
+  return null;
+}
 
 export async function loadGenerationContext(
   config: LoadedSiteConfig,
   onLog?: LogSink
 ): Promise<GenerationContext> {
   const themeProfile = await loadThemeStyleProfile(config, onLog);
-  const formatCtx = await detectContentFormat(config, themeProfile, onLog);
-  const themeGuide = formatThemeStylePrompt(themeProfile, formatCtx.format);
+  const screenshotLedDesign = isScreenshotLedDesignMode(config);
+  const formatCtx =
+    screenshotLedDesign && !contentFormatEnvOverride()
+      ? {
+          format: "html" as ContentFormat,
+          reasons: ["screenshot-led design (no theme zip)"],
+        }
+      : await detectContentFormat(config, themeProfile, onLog);
+  const themeGuide = screenshotLedDesign
+    ? formatScreenshotLedThemeGuide(themeProfile)
+    : formatThemeStylePrompt(themeProfile, formatCtx.format);
   return {
     ...formatCtx,
     themeGuide,
-    templateMarkup: themeProfile.referenceMarkup,
-    templateMarkupSource: themeProfile.referenceMarkupSource,
+    screenshotLedDesign,
+    templateMarkup: screenshotLedDesign
+      ? undefined
+      : themeProfile.referenceMarkup,
+    templateMarkupSource: screenshotLedDesign
+      ? undefined
+      : themeProfile.referenceMarkupSource,
   };
 }
 
 export function buildPageSystemPrompt(
   format: ContentFormat,
-  themeGuide: string
+  themeGuide: string,
+  options?: { screenshotLedDesign?: boolean }
 ): string {
+  if (options?.screenshotLedDesign) {
+    return buildScreenshotLedHtmlSystemPrompt(themeGuide);
+  }
   if (format === "gutenberg") {
     return buildGutenbergSystemPrompt(themeGuide);
   }

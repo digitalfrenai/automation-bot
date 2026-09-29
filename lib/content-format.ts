@@ -16,6 +16,18 @@ export type ContentFormatContext = {
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const formatCache = new Map<string, { expires: number; ctx: ContentFormatContext }>();
 
+function contentFormatEnvOverride(): ContentFormat | null {
+  const v = process.env.CONTENT_FORMAT?.trim().toLowerCase();
+  if (v === "html" || v === "gutenberg" || v === "elementor" || v === "divi") {
+    return v;
+  }
+  return null;
+}
+
+function isKadenceTheme(themeSlug: string, themeName: string): boolean {
+  return /kadence/i.test(themeSlug) || /kadence/i.test(themeName);
+}
+
 function zipBuilderHints(zipPath: string): { elementor: boolean; divi: boolean } {
   try {
     const zip = new AdmZip(zipPath);
@@ -102,7 +114,7 @@ export async function detectContentFormat(
   themeProfile: ThemeStyleProfile,
   onLog?: LogSink
 ): Promise<ContentFormatContext> {
-  const cacheKey = `${config.id}:${config.activeThemeZipPath ?? ""}:${config.wpUrl}:${themeProfile.themeSlug ?? ""}`;
+  const cacheKey = `${config.id}:${config.activeThemeZipPath ?? ""}:${config.wpUrl}:${themeProfile.themeSlug ?? ""}:${process.env.CONTENT_FORMAT ?? ""}`;
   const cached = formatCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {
     return cached.ctx;
@@ -144,9 +156,17 @@ export async function detectContentFormat(
   if (siteSignals.gutenberg) reasons.push("existing pages use Gutenberg blocks");
 
   let format: ContentFormat = "html";
+  const envFormat = contentFormatEnvOverride();
+  const kadence = isKadenceTheme(themeSlug, themeName);
 
-  if (elementorPlugin || siteSignals.elementor) {
-    format = "elementor";
+  if (envFormat) {
+    format = envFormat;
+    reasons.push(`CONTENT_FORMAT=${envFormat}`);
+  } else if (kadence) {
+    format = "gutenberg";
+    reasons.push(
+      "Kadence theme — Gutenberg content (Elementor plugin ignored for pipeline pages)"
+    );
   } else if (
     diviPlugin ||
     diviTheme ||
@@ -154,6 +174,10 @@ export async function detectContentFormat(
     (zipDivi && (diviPlugin || diviTheme))
   ) {
     format = "divi";
+  } else if (siteSignals.elementor && elementorPlugin) {
+    format = "elementor";
+  } else if (elementorPlugin && zipElementor && !siteSignals.gutenberg) {
+    format = "elementor";
   } else if (themeProfile.isBlockTheme || siteSignals.gutenberg) {
     format = "gutenberg";
   } else {
@@ -192,14 +216,37 @@ Rules:
 
 DESIGN CONSISTENCY (required — match active theme spacing, not a plain document):
 - Every section is a constrained wp:group (alternate has-*-background-color for band sections — background stays inside content width).
-- Hero: constrained group with has-*-background-color → inner H1 + lead paragraph + wp:buttons (primary + secondary).
+- Hero: constrained group with has-*-background-color → reuse theme demo wp:image / img URLs from REFERENCE MARKUP when present (keep /wp-content/themes/… src) → inner H1 + lead paragraph + wp:buttons (primary + secondary).
 - For colored bands: nested pattern only if needed — outer constrained group with background, never viewport breakout.
 - Services/benefits: wp:columns with 2–4 wp:column cards (each column: H3 + short paragraph).
 - Do NOT output long runs of bare wp:paragraph blocks without group/column wrappers.
 - Visible headings are human-readable (e.g. "How we work") — NEVER SEO title strings with pipes (|).
 - Reuse the same button block style and section padding pattern across all sections on the page.
+- Button rows: use wp:buttons with flex-wrap; each wp:button link must have comfortable padding (not full-width squeezed pills unless a single primary CTA). Pair CTAs side-by-side with gap, not stacked in one narrow column.
 
 ${themeGuide}`;
+}
+
+export function buildScreenshotLedHtmlSystemPrompt(themeGuide: string): string {
+  return `You are an expert front-end designer and conversion copywriter for WordPress.
+Return ONLY valid HTML fragment content (no markdown fences, no explanations).
+
+CRITICAL:
+- WordPress renders site header, navigation, and footer — output ONLY the page body for the editor.
+- Do NOT include <header>, <footer>, or <nav>.
+- No Gutenberg block comments, Elementor/Divi shortcodes, or page-builder tags.
+- Exactly one <h1> per page.
+
+SCREENSHOT-LED DESIGN:
+- Match the attached reference screenshots for layout and visual design (sections, grids, cards, hero, CTAs, colors, typography).
+- Use <section> elements and inline style attributes liberally to match the reference look.
+- Do not rely on theme demo markup or theme-specific class names.
+- Buttons/CTAs: use display:inline-block (or flex rows with flex-wrap and gap). Minimum padding ~12px 20px; never squeeze label text — allow wrap on long labels; do not set width:100% on side-by-side hero buttons.
+
+${themeGuide}
+
+Use https://placehold.co/WxH for images with descriptive alt text (enrichment replaces them later).
+Write high-converting copy from the business brief only — never copy text from the reference site.`;
 }
 
 export function buildHtmlSystemPrompt(themeGuide: string): string {
@@ -216,7 +263,8 @@ CRITICAL — WordPress theme context:
 ${themeGuide}
 
 Do NOT include Gutenberg block comments, Elementor/Divi shortcodes, or page-builder tags.
-Include exactly one <h1> per page. Write high-converting copy aligned to the business brief.`;
+Include exactly one <h1> per page. Write high-converting copy aligned to the business brief.
+For Home, About, and Services pages mirror theme demo images from REFERENCE MARKUP (same /wp-content/themes/… URLs and figure/image classes). Do not invent random stock photo URLs.`;
 }
 
 export function inferContentFormatFromStorage(

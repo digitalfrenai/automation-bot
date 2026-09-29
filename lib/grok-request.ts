@@ -5,16 +5,34 @@ import { createPipelineLogger } from "@/lib/pipeline-logger";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function errorStatus(err: unknown): number | undefined {
+  if (err && typeof err === "object" && "status" in err) {
+    const status = (err as { status?: number }).status;
+    return typeof status === "number" ? status : undefined;
+  }
+  return undefined;
+}
+
 function isRetryableGrokError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const message = err.message.toLowerCase();
+  const message = errorMessage(err).toLowerCase();
+  const status = errorStatus(err);
   return (
     message.includes("timed out") ||
     message.includes("timeout") ||
     message.includes("rate limit") ||
     message.includes("429") ||
     message.includes("503") ||
-    message.includes("502")
+    message.includes("502") ||
+    message.includes("auth context expired") ||
+    status === 429 ||
+    status === 502 ||
+    status === 503 ||
+    status === 500
   );
 }
 
@@ -43,9 +61,14 @@ export async function createGrokChatCompletion(
         throw err;
       }
 
-      const waitMs = attempt * 3000;
+      const waitMs = attempt * 5000;
+      const detail = errorMessage(err);
+      const hint =
+        detail.toLowerCase().includes("auth context expired")
+          ? " (often caused by oversized screenshots — images are auto-compressed; retrying)"
+          : "";
       log.warn(
-        `${label} failed (${err instanceof Error ? err.message : "unknown error"}). Retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${maxAttempts})…`,
+        `${label} failed (${detail})${hint}. Retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${maxAttempts})…`,
         { phase: "phase2" }
       );
       await sleep(waitMs);

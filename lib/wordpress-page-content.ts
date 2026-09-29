@@ -19,7 +19,9 @@ export type WordPressContentWrite = {
 };
 
 function normalizeForWrite(write: WordPressContentWrite): string {
-  if (write.format === "gutenberg") {
+  const gutenbergStorage =
+    write.format === "gutenberg" || hasGutenbergBlocks(write.html);
+  if (gutenbergStorage) {
     return normalizeContentBounds(normalizeGutenbergContent(write.html));
   }
   if (write.format === "divi" || write.format === "elementor") {
@@ -42,7 +44,13 @@ export async function replaceWordPressPageContent(
           format: hasGutenbergBlocks(content) ? "gutenberg" : "html",
           html: content,
         }
-      : content;
+      : {
+          ...content,
+          format:
+            content.format === "html" && hasGutenbergBlocks(content.html)
+              ? "gutenberg"
+              : content.format,
+        };
 
   const normalized = normalizeForWrite(write);
   const endpoint = `/wp-json/wp/v2/pages/${pageId}?context=edit`;

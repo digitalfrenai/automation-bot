@@ -10,6 +10,11 @@ import {
   publishSlugForPage,
 } from "@/lib/wordpress-page-roles";
 import { runSeoAudit, truncateMeta } from "@/lib/seo-audit";
+import {
+  countVisibleImages,
+  enrichPreparedContentWithPageImages,
+  planPageImageSlots,
+} from "@/lib/page-image-enrichment";
 import { replaceWordPressPageContent } from "@/lib/wordpress-page-content";
 import { pageDisplayTitle } from "@/lib/page-display-title";
 import { wpRequest, type WpPage } from "@/lib/wordpress-client";
@@ -46,10 +51,53 @@ export async function executePhase3(
     onLog,
   });
 
-  await replaceWordPressPageContent(config, pageId, {
+  let publishHtml = seo.finalHtml;
+  let publishWrite: { format: typeof contentFormat; html: string } = {
     format: contentFormat,
-    html: seo.finalHtml,
+    html: publishHtml,
+  };
+
+  const imageSlots = planPageImageSlots(pageTitle, {
+    businessName: config.businessName,
+    niche: config.niche,
+    targetAudience: config.targetAudience,
+    toneOfVoice: config.toneOfVoice,
+    coreServices: config.coreServicesList,
   });
+  if (
+    imageSlots.length > 0 &&
+    countVisibleImages(publishHtml) < imageSlots.length
+  ) {
+    log.info(
+      `Phase 3: adding page images (${countVisibleImages(publishHtml)}/${imageSlots.length} present)…`,
+      { phase: "phase3", pageTitle, pageId }
+    );
+    const withImages = await enrichPreparedContentWithPageImages(
+      config,
+      {
+        format: contentFormat,
+        storage: { format: contentFormat, html: publishHtml },
+        auditHtml: publishHtml,
+      },
+      pageTitle,
+      {
+        businessName: config.businessName,
+        niche: config.niche,
+        targetAudience: config.targetAudience,
+        toneOfVoice: config.toneOfVoice,
+        coreServices: config.coreServicesList,
+      },
+      pageId,
+      onLog
+    );
+    publishWrite = {
+      format: withImages.format,
+      html: withImages.storage.html,
+    };
+    publishHtml = withImages.storage.html;
+  }
+
+  await replaceWordPressPageContent(config, pageId, publishWrite);
 
   const seoTitle = truncateMeta(seo.seo_title, 60);
   const metaDescription = truncateMeta(seo.meta_description, 160);

@@ -38,7 +38,10 @@ Open [http://localhost:3000](http://localhost:3000) for the settings dashboard.
 | GET/POST | `/api/config` | Load or save `SiteConfig` |
 | POST | `/api/test-connection` | Verify Grok + WordPress REST |
 | POST | `/api/upload-theme` | Upload theme `.zip` |
-| POST | `/api/run-pipeline` | SSE — Phases 1–3 |
+| POST | `/api/run-phase1` | SSE — Phase 1 only (theme deploy + scaffold) |
+| POST | `/api/run-phase2` | SSE — Phase 2 only (regenerate page content) |
+| POST | `/api/run-phase3` | SSE — Phase 3 only (SEO + publish existing content) |
+| POST | `/api/run-pipeline` | SSE — Phases 1–3 (full chain) |
 | POST | `/api/run-blog` | SSE — Phase 4 |
 | POST | `/api/run-content-update` | SSE — Phase 5 |
 | POST | `/api/run-social` | SSE — Phase 6 (`mode: generate \| flush`) |

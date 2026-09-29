@@ -41,6 +41,25 @@ export function hasGutenbergBlocks(html: string): boolean {
   return /<!--\s*\/?wp:/i.test(html);
 }
 
+/** Core image block bound to a Media Library attachment (renders on Kadence / block themes). */
+export function wpImageBlockFromMedia(
+  media: { id: number; source_url: string },
+  alt: string
+): string {
+  const safeAlt = escapeHtml(alt);
+  const id = media.id;
+  const url = media.source_url.replace(/"/g, "&quot;");
+  return `<!-- wp:image {"id":${id},"sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image size-large"><img src="${url}" alt="${safeAlt}" class="wp-image-${id}"/></figure>
+<!-- /wp:image -->`;
+}
+
+/** When true (default), page images are inserted as wp:image blocks instead of raw <figure> HTML. */
+export function useBlockEditorImagesForPages(): boolean {
+  const flag = process.env.PAGE_IMAGES_HTML_FIGURES?.trim().toLowerCase();
+  return !(flag === "1" || flag === "true" || flag === "yes");
+}
+
 /** Best-effort HTML → core Gutenberg blocks when the model returns plain HTML. */
 export function htmlToGutenbergBlocks(html: string): string {
   const cleaned = normalizeGutenbergContent(html);

@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { updateSiteStatus } from "@/lib/config-loader";
-import { runSiteBuildPhases1Through3 } from "@/lib/site-build-runner";
+import { runSiteBuildPhase1 } from "@/lib/site-build-runner";
 import { createPipelineSseResponse } from "@/lib/sse-pipeline";
 import { SINGLE_CONFIG_ID } from "@/lib/site-config";
+import { updateSiteStatus } from "@/lib/config-loader";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,17 +17,17 @@ export async function POST(request: NextRequest) {
       configId = body.configId.trim();
     }
   } catch {
-    /* use default config id */
+    /* default */
   }
 
   return createPipelineSseResponse(async (onLog) => {
     try {
-      await runSiteBuildPhases1Through3(configId, onLog);
+      await runSiteBuildPhase1(configId, onLog);
     } catch (err) {
       try {
         await updateSiteStatus(configId, "FAILED");
       } catch {
-        /* ignore secondary failure */
+        /* ignore */
       }
       throw err;
     }

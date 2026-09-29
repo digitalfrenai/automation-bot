@@ -55,6 +55,9 @@ type FormState = {
   sftpUsername: string;
   sftpPassword: string;
   businessName: string;
+  businessLogoUrl: string;
+  businessLogoFilePath: string;
+  designReferencePaths: string[];
   niche: string;
   targetAudience: string;
   toneOfVoice: string;
@@ -123,6 +126,9 @@ const initialForm: FormState = {
   sftpUsername: "",
   sftpPassword: "",
   businessName: "",
+  businessLogoUrl: "",
+  businessLogoFilePath: "",
+  designReferencePaths: [],
   niche: "",
   targetAudience: "",
   toneOfVoice: "",
@@ -263,6 +269,8 @@ export function SettingsDashboard() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingDesignRef, setUploadingDesignRef] = useState(false);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>(null);
   const [connectionsVerified, setConnectionsVerified] = useState(false);
@@ -309,6 +317,9 @@ export function SettingsDashboard() {
             sftpUsername: data.config.sftpUsername ?? "",
             sftpPassword: data.config.sftpPassword ?? "",
             businessName: data.config.businessName ?? "",
+            businessLogoUrl: data.config.businessLogoUrl ?? "",
+            businessLogoFilePath: data.config.businessLogoFilePath ?? "",
+            designReferencePaths: data.config.designReferencePaths ?? [],
             niche: data.config.niche ?? "",
             targetAudience: data.config.targetAudience ?? "",
             toneOfVoice: data.config.toneOfVoice ?? "",
@@ -441,6 +452,59 @@ export function SettingsDashboard() {
       setBanner({ type: "error", message: "Could not save configuration." });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const uploadLogo = async (file: File | null) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    setBanner(null);
+    try {
+      const body = new FormData();
+      body.append("logo", file);
+      const res = await fetch("/api/upload-logo", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({ type: "error", message: data.error ?? "Logo upload failed." });
+        return;
+      }
+      patch({ businessLogoFilePath: data.path, businessLogoUrl: "" });
+      setBanner({ type: "success", message: `Logo uploaded: ${data.filename}` });
+    } catch {
+      setBanner({ type: "error", message: "Logo upload failed." });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const uploadDesignReferences = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploadingDesignRef(true);
+    setBanner(null);
+    try {
+      const body = new FormData();
+      Array.from(files).forEach((f) => body.append("screenshots", f));
+      const res = await fetch("/api/upload-design-reference", {
+        method: "POST",
+        body,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({
+          type: "error",
+          message: data.error ?? "Screenshot upload failed.",
+        });
+        return;
+      }
+      patch({ designReferencePaths: data.paths ?? [] });
+      setBanner({
+        type: "success",
+        message: `Added ${data.added ?? 0} reference screenshot(s). Phase 2 will match this design.`,
+      });
+    } catch {
+      setBanner({ type: "error", message: "Screenshot upload failed." });
+    } finally {
+      setUploadingDesignRef(false);
     }
   };
 
@@ -615,7 +679,31 @@ export function SettingsDashboard() {
     await streamPipeline(
       "/api/run-pipeline",
       { configId: SINGLE_CONFIG_ID },
-      "Phase 1–3 automation completed successfully."
+      "Phases 1–3 completed successfully."
+    );
+  };
+
+  const launchPhase1 = async () => {
+    await streamPipeline(
+      "/api/run-phase1",
+      { configId: SINGLE_CONFIG_ID },
+      "Phase 1 site setup completed."
+    );
+  };
+
+  const launchPhase2 = async () => {
+    await streamPipeline(
+      "/api/run-phase2",
+      { configId: SINGLE_CONFIG_ID },
+      "Phase 2 content generation completed."
+    );
+  };
+
+  const launchPhase3 = async () => {
+    await streamPipeline(
+      "/api/run-phase3",
+      { configId: SINGLE_CONFIG_ID },
+      "Phase 3 SEO publish completed."
     );
   };
 
@@ -825,8 +913,9 @@ export function SettingsDashboard() {
                 Hosting & Theme
               </h2>
               <p className="text-sm text-muted">
-                Optional SFTP credentials for theme deployment and your target theme
-                archive.
+                Optional SFTP credentials for theme deployment. Theme zip is optional if
+                you use reference screenshots on the Business Brief tab — Phase 2 will
+                build page design from those screenshots instead.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -862,7 +951,15 @@ export function SettingsDashboard() {
               </Field>
             </div>
             <div>
-              <p className="mb-2 text-sm font-medium text-slate-700">Theme (.zip)</p>
+              <p className="mb-2 text-sm font-medium text-slate-700">
+                Theme (.zip){" "}
+                <span className="font-normal text-muted">— optional with screenshots</span>
+              </p>
+              <p className="mb-2 text-xs text-muted">
+                Skip this if you uploaded reference screenshots; Grok will match the
+                screenshot design using HTML in the page body. Your live WordPress theme
+                still controls the site header and footer.
+              </p>
               <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-6 py-10 text-center transition hover:border-primary/50 hover:bg-slate-100">
                 <Upload className="mb-2 h-8 w-8 text-muted" />
                 <span className="text-sm font-medium text-slate-700">
@@ -904,6 +1001,126 @@ export function SettingsDashboard() {
                 onChange={(e) => patch({ businessName: e.target.value })}
               />
             </Field>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  Logo URL
+                </label>
+                <p className="text-xs text-muted">
+                  Optional — sets the WordPress site logo and in-page logo slots. Uploaded
+                  file takes precedence over URL.
+                </p>
+                <input
+                  className={inputClass}
+                  value={form.businessLogoUrl}
+                  onChange={(e) => patch({ businessLogoUrl: e.target.value })}
+                  placeholder="https://yoursite.com/logo.png"
+                  disabled={Boolean(form.businessLogoFilePath)}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">Logo file</p>
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-8 text-center transition hover:border-primary/50 hover:bg-slate-100">
+                  <Upload className="mb-2 h-6 w-6 text-muted" />
+                  <span className="text-sm font-medium text-slate-700">
+                    {uploadingLogo ? "Uploading…" : "Upload PNG, JPG, WebP, or SVG"}
+                  </span>
+                  <span className="mt-1 text-xs text-muted">Max 5MB</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                    className="sr-only"
+                    disabled={uploadingLogo}
+                    onChange={(e) => uploadLogo(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {form.businessLogoFilePath ? (
+                  <p className="mt-2 text-xs text-muted">
+                    Active logo:{" "}
+                    <code className="rounded bg-slate-100 px-1 py-0.5">
+                      {form.businessLogoFilePath}
+                    </code>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            {form.businessLogoUrl || form.businessLogoFilePath ? (
+              <div className="rounded-xl border border-border bg-slate-50 p-4">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+                  Logo preview
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.businessLogoFilePath || form.businessLogoUrl}
+                  alt="Logo preview"
+                  className="max-h-16 max-w-[220px] object-contain"
+                />
+              </div>
+            ) : null}
+            <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Reference website design (screenshots)
+              </h3>
+              <p className="mt-1 text-xs text-muted">
+                Required for screenshot-only builds (no theme zip): upload full-page or
+                section captures. Grok vision recreates this layout and styling in Phase 2.
+                Up to 6 images. Copy and branding come from your business brief — not the
+                reference site.
+              </p>
+              {!form.activeThemeZipPath && form.designReferencePaths.length > 0 ? (
+                <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                  Screenshot-led mode active — no theme zip needed. Run Phase 2 after saving.
+                </p>
+              ) : null}
+              <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center transition hover:border-primary/50 hover:bg-slate-100">
+                <Upload className="mb-2 h-6 w-6 text-muted" />
+                <span className="text-sm font-medium text-slate-700">
+                  {uploadingDesignRef
+                    ? "Uploading…"
+                    : "Add reference screenshots (PNG, JPG, WebP)"}
+                </span>
+                <span className="mt-1 text-xs text-muted">
+                  Multiple files allowed · 8MB each
+                </span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="sr-only"
+                  disabled={uploadingDesignRef}
+                  onChange={(e) => uploadDesignReferences(e.target.files)}
+                />
+              </label>
+              {form.designReferencePaths.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {form.designReferencePaths.map((p) => (
+                      <div
+                        key={p}
+                        className="overflow-hidden rounded-lg border border-border bg-slate-50"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={p}
+                          alt="Design reference"
+                          className="h-24 w-auto max-w-[160px] object-cover object-top"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-red-600 hover:text-red-700"
+                    onClick={() => patch({ designReferencePaths: [] })}
+                  >
+                    Clear all reference screenshots
+                  </button>
+                  <p className="text-xs text-muted">
+                    Save configuration after clearing to persist changes.
+                  </p>
+                </div>
+              ) : null}
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Niche / Industry">
                 <input
@@ -1538,7 +1755,7 @@ export function SettingsDashboard() {
       <footer className="mt-8 flex flex-col gap-3 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <p className="text-sm text-muted">
           {connectionsVerified
-            ? "Connections verified — launch site setup, blogs, or content updates when ready."
+            ? "Run phases individually (e.g. re-run Phase 2 only) or use Phases 1–3 for a full site build."
             : "Run connection tests on the Credentials tab before launching automation."}
         </p>
         <div className="flex flex-wrap gap-3">
@@ -1557,6 +1774,32 @@ export function SettingsDashboard() {
           </button>
           <button
             type="button"
+            onClick={launchPhase1}
+            disabled={!connectionsVerified || isPipelineRunning}
+            className="inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-900 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Phase 1 Setup
+          </button>
+          <button
+            type="button"
+            onClick={launchPhase2}
+            disabled={!connectionsVerified || isPipelineRunning}
+            title="Regenerate page content only (requires Phase 1 pages)"
+            className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-900 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Phase 2 Content
+          </button>
+          <button
+            type="button"
+            onClick={launchPhase3}
+            disabled={!connectionsVerified || isPipelineRunning}
+            title="SEO audit and publish existing page content"
+            className="inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-900 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Phase 3 Publish
+          </button>
+          <button
+            type="button"
             onClick={launchAutomation}
             disabled={!connectionsVerified || isPipelineRunning}
             title={
@@ -1571,7 +1814,7 @@ export function SettingsDashboard() {
             ) : (
               <Rocket className="h-4 w-4" />
             )}
-            Launch Phase 1–3
+            Phases 1–3 (all)
           </button>
           <button
             type="button"

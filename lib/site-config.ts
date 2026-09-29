@@ -21,6 +21,9 @@ export type SiteConfigInput = {
   sftpUsername?: string | null;
   sftpPassword?: string | null;
   businessName: string;
+  businessLogoUrl?: string | null;
+  businessLogoFilePath?: string | null;
+  designReferencePaths?: string[];
   niche: string;
   targetAudience: string;
   toneOfVoice: string;
@@ -86,6 +89,10 @@ export function siteConfigToClient(config: {
   sftpUsername: string | null;
   sftpPassword: string | null;
   businessName: string;
+  businessLogoUrl?: string | null;
+  businessLogoFilePath?: string | null;
+  wpLogoMediaId?: number | null;
+  designReferencePaths?: unknown;
   niche: string;
   targetAudience: string;
   toneOfVoice: string;
@@ -120,6 +127,10 @@ export function siteConfigToClient(config: {
 }) {
   return {
     ...config,
+    businessLogoUrl: config.businessLogoUrl ?? null,
+    businessLogoFilePath: config.businessLogoFilePath ?? null,
+    wpLogoMediaId: config.wpLogoMediaId ?? null,
+    designReferencePaths: parseStringArray(config.designReferencePaths),
     coreServices: parseStringArray(config.coreServices),
     targetKeywords: parseStringArray(config.targetKeywords),
     pagesToBuild: parseStringArray(config.pagesToBuild),

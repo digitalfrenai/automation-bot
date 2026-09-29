@@ -17,6 +17,8 @@ import {
   pageMatchesScaffoldTarget,
   resolveScaffoldPage,
 } from "@/lib/wordpress-page-lookup";
+import { applyContentButtonCss } from "@/lib/content-button-normalize";
+import { ensureSiteLogoOnWordPress } from "@/lib/site-logo";
 import { titleToSlug, wpRequest, type WpPage } from "@/lib/wordpress-client";
 
 function pageTitleFromConfig(title: string): string {
@@ -48,6 +50,15 @@ export async function executePhase1(
     const message = err instanceof Error ? err.message : "Settings update failed.";
     log.warn(`Could not update site settings: ${message}`, { phase: "phase1" });
   }
+
+  try {
+    await ensureSiteLogoOnWordPress(config, onLog);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Logo sync failed.";
+    log.warn(`Business logo sync skipped: ${message}`, { phase: "phase1" });
+  }
+
+  await applyContentButtonCss(config, onLog);
 
   log.info("Fetching existing WordPress pages…", { phase: "phase1" });
   const existing = await fetchAllWpPages(config);
