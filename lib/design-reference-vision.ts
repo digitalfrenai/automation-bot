@@ -45,9 +45,9 @@ SCREENSHOT-LED MODE (no theme zip was uploaded):
 - Do NOT mirror theme REFERENCE MARKUP or default block patterns; recreate the screenshot layout in HTML.
 - Match colors, typography scale, button shapes, card styles, spacing, and section backgrounds as closely as practical using semantic HTML plus inline style on sections, cards, and buttons (background, color, padding, border-radius, box-shadow, display:grid/flex, gap, font-size, text-align).
 - CTA buttons must not be cramped: use inline-block or flex-wrap with gap; padding at least 12px 20px; avoid width:100% on paired hero buttons.
-- Team/card social icons (Facebook, X, LinkedIn): use fixed 40×40px circular links in a horizontal row with gap — never flex:1, never single-letter links squeezed in a narrow bar; use aria-label on each icon link.
+- Team/card social icons: 40px circles with inline SVG (Facebook/X/Instagram/LinkedIn). Never output letter labels like "f", "x", or play triangles as social buttons.
 - Wrap the page in a single outer <div style="max-width:1200px;margin:0 auto;"> if needed so layout stays inside the editor content column (no 100vw, no negative margins).
-- Use https://placehold.co/WxH placeholder images with descriptive alt text until images are enriched — do not embed screenshot photos.`;
+- Use https://placehold.co/WxH placeholder images with descriptive alt text until images are enriched — do not embed screenshot photos. Photos must be <img> tags in the layout slot, never CSS background-image.`;
 
 export function designReferenceSystemAddon(config: LoadedSiteConfig): string {
   if (!hasDesignReferenceScreenshots(config)) return "";

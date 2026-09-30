@@ -1008,7 +1008,8 @@ export function SettingsDashboard() {
                 </label>
                 <p className="text-xs text-muted">
                   Optional — sets the WordPress site logo and in-page logo slots. Uploaded
-                  file takes precedence over URL.
+                  file takes precedence over URL. Phase 2 also samples this file for brand
+                  colors (buttons, headings, section bands).
                 </p>
                 <input
                   className={inputClass}

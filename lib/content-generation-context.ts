@@ -14,6 +14,10 @@ import {
   isScreenshotLedDesignMode,
 } from "@/lib/design-reference-vision";
 import {
+  extractLogoPalette,
+  formatLogoPalettePrompt,
+} from "@/lib/logo-palette";
+import {
   formatThemeStylePrompt,
   loadThemeStyleProfile,
 } from "@/lib/theme-style-profile";
@@ -50,9 +54,11 @@ export async function loadGenerationContext(
   const themeGuide = screenshotLedDesign
     ? formatScreenshotLedThemeGuide(themeProfile)
     : formatThemeStylePrompt(themeProfile, formatCtx.format);
+  const logoPalette = await extractLogoPalette(config, onLog);
+  const brandGuide = formatLogoPalettePrompt(logoPalette);
   return {
     ...formatCtx,
-    themeGuide,
+    themeGuide: brandGuide ? `${themeGuide}\n\n${brandGuide}` : themeGuide,
     screenshotLedDesign,
     templateMarkup: screenshotLedDesign
       ? undefined

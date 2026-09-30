@@ -1,13 +1,19 @@
 import type OpenAI from "openai";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import { grokTimeoutMs } from "@/lib/grok-client";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+  if (!(err instanceof Error)) return String(err);
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause instanceof Error && cause.message && cause.message !== err.message) {
+    const code = (cause as { code?: string }).code;
+    return `${err.message} (${code ? `${code}: ` : ""}${cause.message})`;
+  }
+  return err.message;
 }
 
 function errorStatus(err: unknown): number | undefined {
@@ -29,6 +35,14 @@ function isRetryableGrokError(err: unknown): boolean {
     message.includes("503") ||
     message.includes("502") ||
     message.includes("auth context expired") ||
+    message.includes("connection error") ||
+    message.includes("econnreset") ||
+    message.includes("etimedout") ||
+    message.includes("enotfound") ||
+    message.includes("eai_again") ||
+    message.includes("socket") ||
+    message.includes("fetch failed") ||
+    (err instanceof Error && err.name === "APIConnectionError") ||
     status === 429 ||
     status === 502 ||
     status === 503 ||
@@ -53,12 +67,15 @@ export async function createGrokChatCompletion(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await client.chat.completions.create(params);
+      return await client.chat.completions.create(params, {
+        timeout: grokTimeoutMs(),
+      });
     } catch (err) {
       lastError = err;
       const retryable = isRetryableGrokError(err);
       if (!retryable || attempt === maxAttempts) {
-        throw err;
+        const detail = errorMessage(err);
+        throw new Error(`${label} failed: ${detail}`);
       }
 
       const waitMs = attempt * 5000;

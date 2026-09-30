@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { LoadedSiteConfig } from "@/lib/config-loader";
+import { extractLogoPalette } from "@/lib/logo-palette";
 import { hasDesignReferenceScreenshots } from "@/lib/design-reference-vision";
 import type { PreparedContent } from "@/lib/content-pipeline";
 import { injectImagesIntoElementorPrepared } from "@/lib/elementor-builder";
@@ -9,6 +10,7 @@ import {
   hasGutenbergBlocks,
   useBlockEditorImagesForPages,
   wpImageBlockFromMedia,
+  wpImageHtmlFromMedia,
 } from "@/lib/gutenberg-content";
 import {
   generateGrokImage,
@@ -55,11 +57,18 @@ type Brief = {
   coreServices: string[];
 };
 
-function basePhotoRules(brief: Brief, matchDesignReference?: boolean): string {
+function basePhotoRules(
+  brief: Brief,
+  matchDesignReference?: boolean,
+  brandColors?: string
+): string {
   const styleNote = matchDesignReference
-    ? " Match color mood and photography style of the client's reference website screenshots (same visual design language as the target site)."
+    ? " Match photography style of the client's reference website screenshots, but color-grade toward the brand palette."
     : " Match the look of a modern WordPress business theme demo (consistent color grading and composition).";
-  return `Professional marketing photograph for "${brief.businessName}" (${brief.niche}). Audience: ${brief.targetAudience}. Tone: ${brief.toneOfVoice}. Services: ${brief.coreServices.join(", ") || "general business"}.${styleNote} Photorealistic, well-lit, no text overlays, no logos, no watermarks.`;
+  const brand = brandColors
+    ? ` Brand color palette to echo in lighting and wardrobe if natural: ${brandColors}.`
+    : "";
+  return `Professional marketing photograph for "${brief.businessName}" (${brief.niche}). Audience: ${brief.targetAudience}. Tone: ${brief.toneOfVoice}. Services: ${brief.coreServices.join(", ") || "general business"}.${styleNote}${brand} Photorealistic, well-lit, no text overlays, no logos, no watermarks.`;
 }
 
 export function countVisibleImages(html: string): number {
@@ -69,7 +78,8 @@ export function countVisibleImages(html: string): number {
 export function planPageImageSlots(
   pageTitle: string,
   brief: Brief,
-  matchDesignReference?: boolean
+  matchDesignReference?: boolean,
+  brandColors?: string
 ): PageImageSlot[] {
   const home = isHomePage(pageTitle);
   const title = pageTitle.trim().toLowerCase();
@@ -81,21 +91,21 @@ export function planPageImageSlots(
         role: "hero",
         aspectRatio: "16:9",
         alt: `${brief.businessName} — home page banner`,
-        prompt: `${basePhotoRules(brief, matchDesignReference)} Wide hero banner in the same visual style as the active WordPress theme demo.`,
+        prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Wide hero banner in the same visual style as the active WordPress theme demo.`,
       },
       {
         id: "services-visual",
         role: "section",
         aspectRatio: "4:3",
         alt: `${brief.businessName} services`,
-        prompt: `${basePhotoRules(brief, matchDesignReference)} Section image matching theme demo service/feature photography.`,
+        prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Section image matching theme demo service/feature photography.`,
       },
       {
         id: "trust-visual",
         role: "section",
         aspectRatio: "4:3",
         alt: `Trusted ${brief.niche} team at work`,
-        prompt: `${basePhotoRules(brief, matchDesignReference)} Trust section image consistent with theme demo imagery.`,
+        prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Trust section image consistent with theme demo imagery.`,
       },
     ];
   }
@@ -107,7 +117,7 @@ export function planPageImageSlots(
         role: "hero",
         aspectRatio: "16:9",
         alt: `About ${brief.businessName}`,
-        prompt: `${basePhotoRules(brief, matchDesignReference)} About page hero matching theme demo style.`,
+        prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} About page hero matching theme demo style.`,
       },
     ];
   }
@@ -119,14 +129,14 @@ export function planPageImageSlots(
         role: "hero",
         aspectRatio: "16:9",
         alt: `${brief.businessName} services overview`,
-        prompt: `${basePhotoRules(brief, matchDesignReference)} Services hero image matching theme demo style.`,
+        prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Services hero image matching theme demo style.`,
       },
       {
         id: "services-detail",
         role: "section",
         aspectRatio: "4:3",
         alt: `${brief.businessName} service detail`,
-        prompt: `${basePhotoRules(brief, matchDesignReference)} Services detail image matching theme demo style.`,
+        prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Services detail image matching theme demo style.`,
       },
     ];
   }
@@ -141,7 +151,7 @@ export function planPageImageSlots(
       role: "hero",
       aspectRatio: "16:9",
       alt: `${pageTitle} — ${brief.businessName}`,
-      prompt: `${basePhotoRules(brief, matchDesignReference)} Page hero image matching theme demo style for "${pageTitle}".`,
+      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Page hero image matching theme demo style for "${pageTitle}".`,
     },
   ];
 }
@@ -182,14 +192,11 @@ function imageBlockForUpload(upload: UploadedPageImage): string {
   return wpImageBlockFromMedia(upload.media, upload.alt);
 }
 
-function htmlHeroFigure(url: string, alt: string): string {
+function htmlSectionFigure(url: string, alt: string, mediaId?: number): string {
   const safeAlt = alt.replace(/"/g, "&quot;");
-  return `<figure class="page-hero-banner"><img src="${url}" alt="${safeAlt}" loading="eager" decoding="async"/></figure>`;
-}
-
-function htmlSectionFigure(url: string, alt: string): string {
-  const safeAlt = alt.replace(/"/g, "&quot;");
-  return `<figure class="page-section-image"><img src="${url}" alt="${safeAlt}" loading="lazy" decoding="async"/></figure>`;
+  const imgClass = mediaId ? ` class="wp-image-${mediaId}"` : "";
+  const dataId = mediaId ? ` data-id="${mediaId}"` : "";
+  return `<figure class="page-section-image"><img src="${url}" alt="${safeAlt}"${imgClass}${dataId} loading="lazy" decoding="async"/></figure>`;
 }
 
 const LOGO_IMG_ATTR =
@@ -202,38 +209,97 @@ function shouldSwapImgSrc(attrs: string, src: string): boolean {
   return false;
 }
 
-function replaceSwappableImgSources(
+function stampImgAttrsWithMedia(
+  attrs: string,
+  media: { id: number; source_url: string },
+  alt: string
+): string {
+  let next = attrs;
+  const srcMatch = next.match(/\bsrc=(["'])(.*?)\1/i);
+  if (srcMatch) {
+    next = next.replace(srcMatch[0], `src="${media.source_url.replace(/"/g, "&quot;")}"`);
+  } else {
+    next = `${next} src="${media.source_url.replace(/"/g, "&quot;")}"`;
+  }
+  const safeAlt = alt.replace(/"/g, "&quot;");
+  if (/\balt=(["']).*?\1/i.test(next)) {
+    next = next.replace(/\balt=(["']).*?\1/i, `alt="${safeAlt}"`);
+  } else {
+    next = `${next} alt="${safeAlt}"`;
+  }
+  if (/\bdata-id=(["']?)\d+\1/i.test(next)) {
+    next = next.replace(/\bdata-id=(["']?)\d+\1/i, `data-id="${media.id}"`);
+  } else {
+    next = `${next} data-id="${media.id}"`;
+  }
+  if (/\bclass=(["'])([\s\S]*?)\1/i.test(next)) {
+    next = next.replace(/\bclass=(["'])([\s\S]*?)\1/i, (_m, q: string, cls: string) => {
+      const cleaned = cls
+        .split(/\s+/)
+        .filter((c) => c && !/^wp-image-\d+$/i.test(c))
+        .join(" ");
+      return `class=${q}${`${cleaned} wp-image-${media.id}`.trim()}${q}`;
+    });
+  } else {
+    next = `${next} class="wp-image-${media.id}"`;
+  }
+  return next;
+}
+
+function markupNeedsMediaSwap(markup: string): boolean {
+  const srcMatch = markup.match(/\bsrc=(["'])(.*?)\1/i);
+  const src = srcMatch?.[2] ?? "";
+  const bgMatch = markup.match(/background-image\s*:\s*url\((['"]?)([^)'"]+)\1\)/i);
+  const bg = bgMatch?.[2] ?? "";
+  return (
+    shouldSwapImgSrc("", src) ||
+    (bg.length > 0 && (isPlaceholderImgSrc(bg) || isThemeBundledImgSrc(bg)))
+  );
+}
+
+function bindMarkupImagesToMedia(
   html: string,
   images: UploadedPageImage[]
-): string {
-  if (images.length === 0) return html;
-  let index = 0;
-  return html.replace(/<img\b([^>]*?)>/gi, (full, attrs: string) => {
-    if (index >= images.length) return full;
+): { html: string; remaining: UploadedPageImage[] } {
+  if (images.length === 0) return { html, remaining: images };
+  const pool = [...images];
+
+  let out = html.replace(
+    /<!--\s*wp:image\b[\s\S]*?<!--\s*\/wp:image\s*-->/gi,
+    (block) => {
+      if (pool.length === 0) return block;
+      if (!markupNeedsMediaSwap(block)) return block;
+      const img = pool.shift();
+      if (!img) return block;
+      return wpImageBlockFromMedia(img.media, img.alt);
+    }
+  );
+
+  out = out.replace(/<img\b([^>]*?)>/gi, (full, attrs: string) => {
+    if (pool.length === 0) return full;
     const srcMatch = attrs.match(/\bsrc=(["'])(.*?)\1/i);
     const currentSrc = srcMatch?.[2] ?? "";
+    if (!shouldSwapImgSrc(attrs, currentSrc) && /wp-image-\d+/i.test(attrs)) {
+      return full;
+    }
     if (!shouldSwapImgSrc(attrs, currentSrc)) return full;
-
-    const img = images[index++];
-    let nextAttrs = attrs;
-    if (srcMatch) {
-      nextAttrs = nextAttrs.replace(
-        srcMatch[0],
-        `src="${img.media.source_url}"`
-      );
-    } else {
-      nextAttrs = `${nextAttrs} src="${img.media.source_url}"`;
-    }
-    if (/\balt=(["']).*?\1/i.test(nextAttrs)) {
-      nextAttrs = nextAttrs.replace(
-        /\balt=(["']).*?\1/i,
-        `alt="${img.alt.replace(/"/g, "&quot;")}"`
-      );
-    } else {
-      nextAttrs = `${nextAttrs} alt="${img.alt.replace(/"/g, "&quot;")}"`;
-    }
-    return `<img${nextAttrs}>`;
+    const img = pool.shift();
+    if (!img) return full;
+    return `<img${stampImgAttrsWithMedia(attrs, img.media, img.alt)}>`;
   });
+
+  out = out.replace(
+    /background-image\s*:\s*url\((['"]?)([^)'"]+)\1\)/gi,
+    (full, _q: string, url: string) => {
+      if (pool.length === 0) return full;
+      if (!isPlaceholderImgSrc(url) && !isThemeBundledImgSrc(url)) return full;
+      const img = pool.shift();
+      if (!img) return full;
+      return `background-image:url("${img.media.source_url.replace(/"/g, "&quot;")}")`;
+    }
+  );
+
+  return { html: out, remaining: pool };
 }
 
 function contentInsertIndex(html: string): number {
@@ -254,8 +320,10 @@ function contentInsertIndex(html: string): number {
 }
 
 function injectHeroHtml(html: string, hero: UploadedPageImage): string {
-  if (html.includes(hero.media.source_url)) return html;
-  const figure = htmlHeroFigure(hero.media.source_url, hero.alt);
+  if (html.includes(hero.media.source_url) || html.includes(`wp-image-${hero.media.id}`)) {
+    return html;
+  }
+  const figure = `<figure class="page-hero-banner">${wpImageHtmlFromMedia(hero.media, hero.alt)}</figure>`;
   const at = contentInsertIndex(html);
   return html.slice(0, at) + figure + html.slice(at);
 }
@@ -285,7 +353,7 @@ function injectSectionImagesHtml(
     if (out.includes(sec.media.source_url)) return;
     const posIndex = Math.min(idx + 1, h2Positions.length - 1);
     const insertAt = h2Positions[posIndex] + offset;
-    const fig = htmlSectionFigure(sec.media.source_url, sec.alt);
+    const fig = htmlSectionFigure(sec.media.source_url, sec.alt, sec.media.id);
     out = out.slice(0, insertAt) + fig + out.slice(insertAt);
     offset += fig.length;
   });
@@ -303,9 +371,11 @@ function applyImagesToHtmlStorage(
   images: UploadedPageImage[]
 ): string {
   if (images.length === 0) return html;
-  const hero = images.find((i) => i.role === "hero");
-  const sections = images.filter((i) => i.role === "section");
-  let out = replaceSwappableImgSources(html, images);
+  const bound = bindMarkupImagesToMedia(html, images);
+  const remaining = bound.remaining;
+  const hero = remaining.find((i) => i.role === "hero");
+  const sections = remaining.filter((i) => i.role === "section");
+  let out = bound.html;
   if (hero) out = injectHeroHtml(out, hero);
   out = injectSectionImagesHtml(out, sections);
   return out;
@@ -345,9 +415,11 @@ function applyImagesAsBlockStorage(
   images: UploadedPageImage[]
 ): string {
   if (images.length === 0) return html;
-  const hero = images.find((i) => i.role === "hero");
-  const sections = images.filter((i) => i.role === "section");
-  let out = replaceSwappableImgSources(html, images);
+  const bound = bindMarkupImagesToMedia(html, images);
+  const remaining = bound.remaining;
+  const hero = remaining.find((i) => i.role === "hero");
+  const sections = remaining.filter((i) => i.role === "section");
+  let out = bound.html;
   if (hero) out = injectHeroAsBlock(out, hero);
   out = injectSectionImagesAsBlocks(out, sections);
   return out;
@@ -392,7 +464,7 @@ function applyUploadedImages(
   }
 
   if (prepared.format === "elementor") {
-    const withElementor = injectImagesIntoElementorPrepared(
+    return injectImagesIntoElementorPrepared(
       {
         format: "elementor",
         storage: {
@@ -404,19 +476,6 @@ function applyUploadedImages(
       },
       images
     );
-    const visibleHtml = applyImagesAsBlockStorage(
-      withElementor.storage.html,
-      images
-    );
-    return {
-      format: "gutenberg",
-      storage: {
-        format: "gutenberg",
-        html: visibleHtml,
-        meta: withElementor.storage.meta,
-      },
-      auditHtml: gutenbergToAuditHtml(visibleHtml),
-    };
   }
 
   if (prepared.format === "divi") {
@@ -591,7 +650,11 @@ export async function enrichPreparedContentWithPageImages(
 
   const contentHtml = prepared.storage.html;
   const matchDesignRef = hasDesignReferenceScreenshots(config);
-  const slots = planPageImageSlots(pageTitle, brief, matchDesignRef);
+  const logoPalette = await extractLogoPalette(config, onLog);
+  const brandColors = logoPalette
+    ? `${logoPalette.primary}, ${logoPalette.secondary}, ${logoPalette.accent}`
+    : undefined;
+  const slots = planPageImageSlots(pageTitle, brief, matchDesignRef, brandColors);
 
   if (slots.length === 0) {
     return prepared;

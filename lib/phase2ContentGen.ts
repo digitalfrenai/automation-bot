@@ -19,6 +19,7 @@ import { hasGutenbergBlocks } from "@/lib/gutenberg-content";
 import { createGrokClient, GROK_MODEL } from "@/lib/grok-client";
 import { createGrokChatCompletion } from "@/lib/grok-request";
 import { applyContentButtonCss } from "@/lib/content-button-normalize";
+import { applyLogoPaletteCss } from "@/lib/logo-palette";
 import {
   buildMultimodalUserContent,
   designReferenceSystemAddon,
@@ -193,6 +194,7 @@ export async function executePhase2(
       : undefined;
 
   await applyContentButtonCss(config, onLog).catch(() => undefined);
+  await applyLogoPaletteCss(config, onLog).catch(() => undefined);
 
   const designImages = await loadDesignReferenceImages(config);
   const hasDesignRef = designImages.length > 0;
@@ -204,7 +206,7 @@ export async function executePhase2(
     useTemplateFill = false;
   } else if (genCtx.screenshotLedDesign) {
     log.info(
-      "Screenshot-led mode: no theme zip — page HTML will follow reference screenshots.",
+      "Screenshot-led mode: no theme zip — page HTML will follow reference screenshots. Grok vision can take several minutes; a timeout retry is normal.",
       { phase: "phase2", pageTitle, pageId }
     );
   } else if (hasDesignRef) {

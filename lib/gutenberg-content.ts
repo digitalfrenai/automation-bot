@@ -41,16 +41,27 @@ export function hasGutenbergBlocks(html: string): boolean {
   return /<!--\s*\/?wp:/i.test(html);
 }
 
+export function wpImageHtmlFromMedia(
+  media: { id: number; source_url: string },
+  alt: string,
+  extraClass = ""
+): string {
+  const safeAlt = escapeHtml(alt);
+  const id = media.id;
+  const url = media.source_url.replace(/"/g, "&quot;");
+  const cls = ["wp-image-" + id, extraClass].filter(Boolean).join(" ");
+  return `<img src="${url}" alt="${safeAlt}" class="${cls}" data-id="${id}"/>`;
+}
+
 /** Core image block bound to a Media Library attachment (renders on Kadence / block themes). */
 export function wpImageBlockFromMedia(
   media: { id: number; source_url: string },
   alt: string
 ): string {
-  const safeAlt = escapeHtml(alt);
   const id = media.id;
-  const url = media.source_url.replace(/"/g, "&quot;");
+  const img = wpImageHtmlFromMedia(media, alt);
   return `<!-- wp:image {"id":${id},"sizeSlug":"large","linkDestination":"none"} -->
-<figure class="wp-block-image size-large"><img src="${url}" alt="${safeAlt}" class="wp-image-${id}"/></figure>
+<figure class="wp-block-image size-large">${img}</figure>
 <!-- /wp:image -->`;
 }
 
@@ -116,12 +127,54 @@ ${innerHtml}
 <!-- /wp:group -->`;
 }
 
+function imageBlockFromImgMarkup(tag: string): string {
+  const srcMatch = tag.match(/\bsrc=(["'])(.*?)\1/i);
+  const altMatch = tag.match(/\balt=(["'])(.*?)\1/i);
+  const classMatch = tag.match(/\bclass=(["'])(.*?)\1/i);
+  const src = srcMatch?.[2]?.trim() ?? "";
+  const alt = altMatch?.[2] ?? "";
+  const idFromClass = classMatch?.[2]?.match(/wp-image-(\d+)/i);
+  const idAttr = tag.match(/\bdata-id=(["']?)(\d+)\1/i);
+  const id = Number(idFromClass?.[1] || idAttr?.[2] || 0);
+  if (id > 0 && src) {
+    return wpImageBlockFromMedia({ id, source_url: src }, alt || "Image");
+  }
+  const safeSrc = src.replace(/"/g, "&quot;");
+  const safeAlt = escapeHtml(alt);
+  return `<!-- wp:image {"sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image size-large"><img src="${safeSrc}" alt="${safeAlt}"/></figure>
+<!-- /wp:image -->`;
+}
+
 function paragraphsFromHtml(fragment: string): string[] {
+  const out: string[] = [];
+  const tokenRe = /(<figure\b[\s\S]*?<\/figure>)|(<img\b[^>]*>)/gi;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(fragment))) {
+    const before = fragment.slice(last, m.index);
+    out.push(...textChunksToBlocks(before));
+    const figure = m[1];
+    const img = m[2];
+    if (figure) {
+      const innerImg = figure.match(/<img\b[^>]*>/i)?.[0] ?? figure;
+      out.push(imageBlockFromImgMarkup(innerImg));
+    } else if (img) {
+      out.push(imageBlockFromImgMarkup(img));
+    }
+    last = m.index + m[0].length;
+  }
+  out.push(...textChunksToBlocks(fragment.slice(last)));
+  return out.filter(Boolean);
+}
+
+function textChunksToBlocks(fragment: string): string[] {
   const out: string[] = [];
   const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   let m: RegExpExecArray | null;
   while ((m = pRe.exec(fragment))) {
-    out.push(paragraphBlock(m[1].trim()));
+    const inner = m[1].trim();
+    if (inner) out.push(paragraphBlock(inner));
   }
   const ulRe = /<ul[^>]*>([\s\S]*?)<\/ul>/gi;
   while ((m = ulRe.exec(fragment))) {
@@ -132,7 +185,8 @@ function paragraphsFromHtml(fragment: string): string[] {
     out.push(listBlock(m[1], true));
   }
   if (out.length === 0 && fragment.trim()) {
-    out.push(paragraphBlock(fragment.trim()));
+    const stripped = stripTags(fragment);
+    if (stripped) out.push(paragraphBlock(fragment.trim()));
   }
   return out;
 }

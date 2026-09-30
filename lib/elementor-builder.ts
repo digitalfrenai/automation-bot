@@ -49,7 +49,8 @@ function imageWidget(url: string, alt: string, mediaId?: number): ElNode {
         id: mediaId ?? 0,
         alt,
       },
-      image_size: "full",
+        image_size: "full",
+      caption: alt,
     },
     elements: [],
   };
@@ -259,7 +260,7 @@ function applyImagesToElementorSnapshotHtml(
   if (parts.length <= 1) {
     const hero = images[0];
     if (!hero) return html;
-    return `${htmlHeroFigure(hero.media.source_url, hero.alt)}${html}`;
+    return `${htmlHeroFigure(hero.media.source_url, hero.alt, hero.media.id)}${html}`;
   }
 
   return parts
@@ -267,13 +268,16 @@ function applyImagesToElementorSnapshotHtml(
       if (index === 0 && !part.trim()) return part;
       const img = images[index - 1];
       if (!img || !/^<section\b/i.test(part)) return part;
-      const figure = htmlHeroFigure(img.media.source_url, img.alt);
-      return part.replace(/(<section\b[^>]*>)/i, `$1${figure}`);
+      return part.replace(
+        /(<section\b[^>]*>)/i,
+        `$1${htmlHeroFigure(img.media.source_url, img.alt, img.media.id)}`
+      );
     })
     .join("");
 }
 
-function htmlHeroFigure(url: string, alt: string): string {
+function htmlHeroFigure(url: string, alt: string, mediaId?: number): string {
   const safeAlt = alt.replace(/"/g, "&quot;");
-  return `<figure><img src="${url}" alt="${safeAlt}"/></figure>`;
+  const idClass = mediaId ? ` class="wp-image-${mediaId}" data-id="${mediaId}"` : "";
+  return `<figure><img src="${url}" alt="${safeAlt}"${idClass}/></figure>`;
 }

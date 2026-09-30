@@ -242,10 +242,12 @@ SCREENSHOT-LED DESIGN:
 - Use <section> elements and inline style attributes liberally to match the reference look.
 - Do not rely on theme demo markup or theme-specific class names.
 - Buttons/CTAs: use display:inline-block (or flex rows with flex-wrap and gap). Minimum padding ~12px 20px; never squeeze label text — allow wrap on long labels; do not set width:100% on side-by-side hero buttons.
+- Social links (Facebook, X/Twitter, Instagram, LinkedIn) under team/cards: 40×40 circular buttons with inline SVG icons (not Font Awesome, not letter labels like "f" or "x"). Put them in a flex row with gap:8px. Do not use the same min-width as text CTAs.
 
 ${themeGuide}
 
-Use https://placehold.co/WxH for images with descriptive alt text (enrichment replaces them later).
+- Photos and card pictures MUST be real <img src="https://placehold.co/WxH" alt="..."> (or <figure><img>) in the exact layout slot. Do NOT put photos in CSS background-image — WordPress/Elementor cannot replace those in place.
+- Use https://placehold.co/WxH for images with descriptive alt text (enrichment replaces them later with Media Library attachments).
 Write high-converting copy from the business brief only — never copy text from the reference site.`;
 }
 

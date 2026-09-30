@@ -18,6 +18,7 @@ import {
   resolveScaffoldPage,
 } from "@/lib/wordpress-page-lookup";
 import { applyContentButtonCss } from "@/lib/content-button-normalize";
+import { applyLogoPaletteCss } from "@/lib/logo-palette";
 import { ensureSiteLogoOnWordPress } from "@/lib/site-logo";
 import { titleToSlug, wpRequest, type WpPage } from "@/lib/wordpress-client";
 
@@ -59,6 +60,7 @@ export async function executePhase1(
   }
 
   await applyContentButtonCss(config, onLog);
+  await applyLogoPaletteCss(config, onLog);
 
   log.info("Fetching existing WordPress pages…", { phase: "phase1" });
   const existing = await fetchAllWpPages(config);
