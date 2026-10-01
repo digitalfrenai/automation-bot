@@ -223,6 +223,7 @@ DESIGN CONSISTENCY (required — match active theme spacing, not a plain documen
 - Visible headings are human-readable (e.g. "How we work") — NEVER SEO title strings with pipes (|).
 - Reuse the same button block style and section padding pattern across all sections on the page.
 - Button rows: use wp:buttons with flex-wrap; each wp:button link must have comfortable padding (not full-width squeezed pills unless a single primary CTA). Pair CTAs side-by-side with gap, not stacked in one narrow column.
+- Mobile: wp:columns must keep isStackedOnMobile (default true) — never set "isStackedOnMobile":false; no fixed column px widths; images without fixed width attributes.
 
 ${themeGuide}`;
 }
@@ -244,6 +245,13 @@ SCREENSHOT-LED DESIGN:
 - Buttons/CTAs: use display:inline-block (or flex rows with flex-wrap and gap). Minimum padding ~12px 20px; never squeeze label text — allow wrap on long labels; do not set width:100% on side-by-side hero buttons.
 - Social links (Facebook, X/Twitter, Instagram, LinkedIn) under team/cards: 40×40 circular buttons with inline SVG icons (not Font Awesome, not letter labels like "f" or "x"). Put them in a flex row with gap:8px. Do not use the same min-width as text CTAs.
 
+MOBILE-FIRST / RESPONSIVE (required — the page must look right on a 375px phone):
+- Multi-column layouts MUST collapse on small screens: use display:grid with grid-template-columns:repeat(auto-fit, minmax(min(100%, 280px), 1fr)) — never a fixed "1fr 1fr" or "repeat(3, 1fr)".
+- Flex rows must have flex-wrap:wrap and children flex:1 1 280px (not fixed px widths, not width:50%).
+- Headings use fluid sizes: font-size:clamp(1.8rem, 5vw, 3.25rem) for H1, clamp(1.4rem, 3.5vw, 2.25rem) for H2. Never font-size above 3.25rem.
+- Section padding: clamp(40px, 8vw, 96px) vertical and clamp(16px, 4vw, 48px) horizontal. No fixed height/min-height on sections.
+- Images: max-width:100%; height:auto. No fixed px widths on text columns or cards.
+
 ${themeGuide}
 
 - Photos and card pictures MUST be real <img src="https://placehold.co/WxH" alt="..."> (or <figure><img>) in the exact layout slot. Do NOT put photos in CSS background-image — WordPress/Elementor cannot replace those in place.
@@ -261,6 +269,7 @@ CRITICAL — WordPress theme context:
 - Do NOT include <header>, <footer>, <nav>, site-wide menus, logo bars, copyright bars, or duplicate CTAs that belong in the theme chrome.
 - Use <section> for heroes and content blocks — never wrap the page in <header> or <footer>.
 - Do NOT use width:100vw, negative margins, or CSS that breaks out of the content column. No inline width/margin styles.
+- Mobile-friendly: any grid/column layout must collapse on phones — use grid-template-columns:repeat(auto-fit, minmax(min(100%, 280px), 1fr)) or flex-wrap:wrap with flex:1 1 280px children; fluid heading sizes via clamp(); images max-width:100%; no fixed heights.
 
 ${themeGuide}
 

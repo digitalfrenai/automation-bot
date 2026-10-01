@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import {
   AlertCircle,
+  BookOpen,
   CheckCircle2,
   FilePenLine,
   GitBranch,
@@ -769,17 +771,26 @@ export function SettingsDashboard() {
 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <header className="mb-8">
-        <p className="text-sm font-medium uppercase tracking-wide text-primary">
-          Grok WordPress Automation
-        </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
-          Setup Dashboard
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted">
-          Configure credentials and business brief, then run Phases 1–5 alone, or
-          enable social + E2E for the full connected pipeline with approvals.
-        </p>
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium uppercase tracking-wide text-primary">
+            Grok WordPress Automation
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
+            Setup Dashboard
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-muted">
+            Configure credentials and business brief, then run Phases 1–5 alone, or
+            enable social + E2E for the full connected pipeline with approvals.
+          </p>
+        </div>
+        <Link
+          href="/how-to-use"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          <BookOpen className="h-4 w-4" />
+          How to use
+        </Link>
       </header>
 
       {banner ? (

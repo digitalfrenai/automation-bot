@@ -20,6 +20,7 @@ import { createGrokClient, GROK_MODEL } from "@/lib/grok-client";
 import { createGrokChatCompletion } from "@/lib/grok-request";
 import { applyContentButtonCss } from "@/lib/content-button-normalize";
 import { applyLogoPaletteCss } from "@/lib/logo-palette";
+import { applyResponsiveContentCss } from "@/lib/content-responsive-normalize";
 import {
   buildMultimodalUserContent,
   designReferenceSystemAddon,
@@ -195,6 +196,7 @@ export async function executePhase2(
 
   await applyContentButtonCss(config, onLog).catch(() => undefined);
   await applyLogoPaletteCss(config, onLog).catch(() => undefined);
+  await applyResponsiveContentCss(config, onLog).catch(() => undefined);
 
   const designImages = await loadDesignReferenceImages(config);
   const hasDesignRef = designImages.length > 0;

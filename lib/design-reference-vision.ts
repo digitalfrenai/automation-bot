@@ -47,6 +47,7 @@ SCREENSHOT-LED MODE (no theme zip was uploaded):
 - CTA buttons must not be cramped: use inline-block or flex-wrap with gap; padding at least 12px 20px; avoid width:100% on paired hero buttons.
 - Team/card social icons: 40px circles with inline SVG (Facebook/X/Instagram/LinkedIn). Never output letter labels like "f", "x", or play triangles as social buttons.
 - Wrap the page in a single outer <div style="max-width:1200px;margin:0 auto;"> if needed so layout stays inside the editor content column (no 100vw, no negative margins).
+- The screenshots show desktop; the output must still be mobile-friendly: grids via repeat(auto-fit, minmax(min(100%, 280px), 1fr)), flex-wrap:wrap, clamp() font sizes, no fixed heights or px column widths.
 - Use https://placehold.co/WxH placeholder images with descriptive alt text until images are enriched — do not embed screenshot photos. Photos must be <img> tags in the layout slot, never CSS background-image.`;
 
 export function designReferenceSystemAddon(config: LoadedSiteConfig): string {

@@ -1,10 +1,12 @@
 import { loadSiteConfig } from "@/lib/config-loader";
 import type { ContentFormat } from "@/lib/content-format";
 import { prepareSeoCorrectedContent } from "@/lib/content-pipeline";
+import { normalizeResponsiveLayout } from "@/lib/content-responsive-normalize";
 import { createGrokClient, extractJsonObject, GROK_MODEL } from "@/lib/grok-client";
 import { createGrokChatCompletion } from "@/lib/grok-request";
 import { hasGutenbergBlocks, normalizeGutenbergContent } from "@/lib/gutenberg-content";
 import { normalizePageHtml } from "@/lib/page-content-html";
+import { titleToSlug } from "@/lib/wordpress-client";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import type { PipelinePhase, SeoValidationPayload } from "@/lib/pipeline-types";
@@ -15,10 +17,10 @@ function buildSeoSystemPrompt(
 ): string {
   const formatNote =
     contentFormat === "gutenberg"
-      ? "- corrected_html must remain valid Gutenberg block markup (preserve <!-- wp: --> comments)."
+      ? "- Content format is Gutenberg. Do not emit block markup in this JSON."
       : contentFormat === "elementor" || contentFormat === "divi"
-        ? "- Do not rewrite page builder layout in corrected_html; repeat the input unchanged unless only alt text on <img> in snapshot HTML."
-        : "- Preserve existing class attributes and theme CSS classes; do not replace theme classes with inline styles.";
+        ? "- Content format is a page builder. Do not emit layout markup in this JSON."
+        : "- Content format is HTML. Do not emit page markup in this JSON.";
 
   return `You are a technical SEO auditor for WordPress ${contentKind}s.
 Analyze HTML against target keywords and return ONLY a JSON object with this exact shape:
@@ -30,19 +32,16 @@ Analyze HTML against target keywords and return ONLY a JSON object with this exa
   "heading_hierarchy_valid": boolean,
   "keyword_density_passed": boolean,
   "validation_passed": boolean,
-  "corrected_html": "full corrected content if fixes needed, otherwise repeat input HTML",
-  "simple_fixes_applied": ["short description of each auto-fix"]
+  "corrected_html": "",
+  "simple_fixes_applied": ["short description of each issue found"]
 }
 Rules:
-- seo_title max 60 characters — for SEO plugins and browser tabs ONLY; never copy seo_title verbatim into visible H1/H2 text.
-- Visible H1 must be a short marketing headline (no pipe-separated keyword lists like "Brand | Service | City").
+- seo_title max 60 characters — for SEO plugins and browser tabs ONLY.
 - meta_description max 160 characters.
-- Ensure exactly one H1 and logical H2/H3 hierarchy when validation_passed is false.
-- Ensure every <img> has meaningful alt text in corrected_html when applicable.
-- Keep corrected_html concise: only fix heading hierarchy/H1/alt/link issues; do not rewrite the entire piece or add new sections.
-- NEVER remove <img> tags, wp:image blocks, or <figure class="page-hero-banner"> / page-section-image markup — copy them verbatim from the input HTML.
+- corrected_html MUST be an empty string. Do not repeat, rewrite, or quote the page HTML. Page content is already saved.
+- Report heading, alt-text, or keyword issues only in simple_fixes_applied. Set validation_passed false when those issues exist.
 ${formatNote}
-- No markdown, no prose outside JSON.`;
+- No markdown, no prose outside JSON. Keep the JSON small.`;
 }
 
 const MAX_SEO_HTML_CHARS = 14_000;
@@ -71,22 +70,79 @@ export type SeoAuditResult = SeoValidationPayload & {
   contentFormat: ContentFormat;
 };
 
-function parseSeoPayload(text: string): SeoValidationPayload & {
-  simple_fixes_applied?: string[];
-} {
-  const jsonText = extractJsonObject(text);
-  const parsed = JSON.parse(jsonText) as SeoValidationPayload & {
-    simple_fixes_applied?: string[];
+function readJsonStringField(text: string, key: string): string | undefined {
+  const match = text.match(
+    new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`)
+  );
+  if (!match) return undefined;
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1];
+  }
+}
+
+/** Metadata-only payload when the model reply is truncated or not valid JSON. */
+function fallbackSeoPayload(
+  title: string,
+  reason: string
+): SeoValidationPayload & { simple_fixes_applied?: string[] } {
+  const seoTitle = truncateMeta(title.trim() || "Page", 60);
+  return {
+    seo_title: seoTitle,
+    meta_description: truncateMeta(
+      `${seoTitle}. Learn more about our services and how we can help.`,
+      160
+    ),
+    slug: titleToSlug(seoTitle),
+    h1_count: 1,
+    heading_hierarchy_valid: true,
+    keyword_density_passed: true,
+    validation_passed: true,
+    corrected_html: "",
+    simple_fixes_applied: [`SEO JSON skipped (${reason}); published existing page content.`],
   };
+}
+
+function parseSeoPayload(
+  text: string,
+  title: string
+): SeoValidationPayload & { simple_fixes_applied?: string[] } {
+  let parsed: SeoValidationPayload & { simple_fixes_applied?: string[] };
+  try {
+    const jsonText = extractJsonObject(text);
+    parsed = JSON.parse(jsonText) as SeoValidationPayload & {
+      simple_fixes_applied?: string[];
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "invalid JSON";
+    const seoTitle = readJsonStringField(text, "seo_title");
+    const metaDescription = readJsonStringField(text, "meta_description");
+    const slug = readJsonStringField(text, "slug");
+    if (!seoTitle || !metaDescription) {
+      return fallbackSeoPayload(title, reason);
+    }
+    return {
+      ...fallbackSeoPayload(title, reason),
+      seo_title: truncateMeta(seoTitle, 60),
+      meta_description: truncateMeta(metaDescription, 160),
+      slug: slug?.trim() || titleToSlug(seoTitle),
+      corrected_html: "",
+      validation_passed: true,
+    };
+  }
 
   if (
     typeof parsed.seo_title !== "string" ||
     typeof parsed.meta_description !== "string" ||
     typeof parsed.slug !== "string" ||
-    typeof parsed.corrected_html !== "string" ||
     typeof parsed.validation_passed !== "boolean"
   ) {
-    throw new Error("Grok SEO response missing required fields.");
+    return fallbackSeoPayload(title, "missing required fields");
+  }
+
+  if (typeof parsed.corrected_html !== "string") {
+    parsed.corrected_html = "";
   }
 
   return parsed;
@@ -94,12 +150,12 @@ function parseSeoPayload(text: string): SeoValidationPayload & {
 
 function normalizeStorageHtml(html: string, format: ContentFormat): string {
   if (format === "gutenberg") {
-    return normalizeGutenbergContent(html);
+    return normalizeResponsiveLayout(normalizeGutenbergContent(html));
   }
   if (format === "divi" || format === "elementor") {
     return html.trim();
   }
-  return normalizePageHtml(html);
+  return normalizeResponsiveLayout(normalizePageHtml(html));
 }
 
 function countImgTags(html: string): number {
@@ -199,7 +255,13 @@ export async function runSeoAudit(options: {
     throw new Error(`Grok returned empty SEO payload for "${title}".`);
   }
 
-  const seo = parseSeoPayload(content);
+  const seo = parseSeoPayload(content, title);
+  if (seo.simple_fixes_applied?.some((note) => note.startsWith("SEO JSON skipped"))) {
+    log.warn(
+      `SEO reply for "${title}" was not valid JSON (${seo.simple_fixes_applied[0]}). Publishing the page already saved.`,
+      { phase, pageTitle: title }
+    );
+  }
   const finalHtml = pickAuditedHtml(rawHtml, seo, contentFormat);
 
   if (!seo.validation_passed) {

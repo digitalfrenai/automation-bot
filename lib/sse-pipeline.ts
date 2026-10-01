@@ -15,12 +15,31 @@ function sseEncode(entry: SseEvent): string {
 export function createPipelineSseResponse(
   run: (onLog: (entry: PipelineLogEntry) => void) => Promise<void>
 ): Response {
+  let closed = false;
+  let stopHeartbeat: (() => void) | undefined;
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const encoder = new TextEncoder();
 
+      const closeStream = () => {
+        if (closed) return;
+        closed = true;
+        clearInterval(heartbeat);
+        try {
+          controller.close();
+        } catch {
+          /* client already disconnected */
+        }
+      };
+
       const push = (entry: SseEvent) => {
-        controller.enqueue(encoder.encode(sseEncode(entry)));
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(sseEncode(entry)));
+        } catch {
+          closeStream();
+        }
       };
 
       const onLog = (entry: PipelineLogEntry) => {
@@ -28,12 +47,17 @@ export function createPipelineSseResponse(
       };
 
       const heartbeat = setInterval(() => {
+        if (closed) {
+          clearInterval(heartbeat);
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));
         } catch {
-          clearInterval(heartbeat);
+          closeStream();
         }
       }, 15_000);
+      stopHeartbeat = () => clearInterval(heartbeat);
 
       (async () => {
         try {
@@ -44,10 +68,13 @@ export function createPipelineSseResponse(
             err instanceof Error ? err.message : "Pipeline execution failed.";
           push({ type: "error", message });
         } finally {
-          clearInterval(heartbeat);
-          controller.close();
+          closeStream();
         }
       })();
+    },
+    cancel() {
+      closed = true;
+      stopHeartbeat?.();
     },
   });
 
