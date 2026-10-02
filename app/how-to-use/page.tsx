@@ -152,7 +152,7 @@ const BUILD_STEPS: Step[] = [
       <>
         <p>
           Deploys and activates the theme zip (if SFTP + zip are set), verifies
-          the REST API, syncs the site logo, writes the bot's Additional CSS blocks
+          the REST API, syncs the site logo, writes the bot&apos;s Additional CSS blocks
           (button spacing, brand colors, mobile layout), and creates one draft page
           per selected page. Existing pages with the same slug are reused, so
           re-running is safe.
@@ -317,7 +317,7 @@ const TROUBLESHOOTING: { problem: string; fix: React.ReactNode }[] = [
     problem: "SEO step fails with “Unterminated string in JSON”",
     fix: (
       <>
-        Grok's reply was cut off. Phase 3 now falls back to publishing the saved
+        Grok&apos;s reply was cut off. Phase 3 now falls back to publishing the saved
         page with a title-based description — just re-run Phase 3 for that page.
       </>
     ),
@@ -346,7 +346,7 @@ const TROUBLESHOOTING: { problem: string; fix: React.ReactNode }[] = [
     problem: "“Home” title band appears above page content (Kadence)",
     fix: (
       <>
-        That is the theme's page title bar. Hide it in{" "}
+        That is the theme&apos;s page title bar. Hide it in{" "}
         <em>Appearance → Customize → Page Layout → Page Title</em>, or per page
         under <em>Kadence Page Settings → Title → Hide</em>.
       </>
@@ -395,8 +395,9 @@ const TIPS: React.ReactNode[] = [
   </>,
   <>
     Additional CSS blocks written by the bot are marked{" "}
-    <code>/* wp-bot-content-buttons */</code>, <code>/* wp-bot-logo-palette */</code>,
-    and <code>/* wp-bot-responsive */</code>. You can edit other CSS freely; those
+    <code>{"/* wp-bot-content-buttons */"}</code>,{" "}
+    <code>{"/* wp-bot-logo-palette */"}</code>, and{" "}
+    <code>{"/* wp-bot-responsive */"}</code>. You can edit other CSS freely; those
     blocks are replaced on each run.
   </>,
   <>

@@ -66,7 +66,7 @@ export function wpImageBlockFromMedia(
 }
 
 /** When true (default), page images are inserted as wp:image blocks instead of raw <figure> HTML. */
-export function useBlockEditorImagesForPages(): boolean {
+export function preferBlockEditorPageImages(): boolean {
   const flag = process.env.PAGE_IMAGES_HTML_FIGURES?.trim().toLowerCase();
   return !(flag === "1" || flag === "true" || flag === "yes");
 }

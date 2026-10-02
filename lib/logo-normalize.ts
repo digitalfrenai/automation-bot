@@ -21,7 +21,7 @@ export async function normalizeLogoForSiteHeader(
     return { buffer, mimeType };
   }
 
-  let sharp: typeof import("sharp");
+  let sharp: (typeof import("sharp"))["default"];
   try {
     sharp = (await import("sharp")).default;
   } catch {

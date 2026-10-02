@@ -8,7 +8,7 @@ import { diviToAuditHtml, injectImagesIntoDiviHtml } from "@/lib/divi-builder";
 import {
   gutenbergToAuditHtml,
   hasGutenbergBlocks,
-  useBlockEditorImagesForPages,
+  preferBlockEditorPageImages,
   wpImageBlockFromMedia,
   wpImageHtmlFromMedia,
 } from "@/lib/gutenberg-content";
@@ -22,7 +22,6 @@ import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import {
   buildThemeImageCatalog,
-  extractImageUrlsFromMarkup,
   pickThemeImagesForSlots,
   readThemeImageBytesFromZip,
   type ThemeImageAsset,
@@ -167,25 +166,6 @@ function isPlaceholderImgSrc(src: string): boolean {
 
 function isThemeBundledImgSrc(src: string): boolean {
   return /\/wp-content\/themes\//i.test(src);
-}
-
-function countPlaceholderImages(html: string): number {
-  let count = 0;
-  const re = /<img\b[^>]*\bsrc=(["'])(.*?)\1/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html))) {
-    if (isPlaceholderImgSrc(m[2])) count++;
-  }
-  return count;
-}
-
-function hasThemeBundledImages(html: string): boolean {
-  const re = /<img\b[^>]*\bsrc=(["'])(.*?)\1/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html))) {
-    if (isThemeBundledImgSrc(m[2])) return true;
-  }
-  return false;
 }
 
 function imageBlockForUpload(upload: UploadedPageImage): string {
@@ -432,7 +412,7 @@ function applyUploadedImages(
   if (images.length === 0) return prepared;
 
   const useBlocks =
-    useBlockEditorImagesForPages() ||
+    preferBlockEditorPageImages() ||
     prepared.format === "gutenberg" ||
     hasGutenbergBlocks(prepared.storage.html);
 
@@ -612,28 +592,6 @@ async function fillRemainingSlotsWithAi(
   }
 
   return out;
-}
-
-async function resolveFeaturedMediaFromMarkup(
-  config: LoadedSiteConfig,
-  html: string,
-  pageTitle: string,
-  altFallback: string
-): Promise<WpMediaItem | null> {
-  const urls = extractImageUrlsFromMarkup(html, config.wpUrl);
-  const themeFirst =
-    urls.find((u) => isThemeBundledImgSrc(u)) ?? urls[0];
-  if (!themeFirst) return null;
-
-  try {
-    return await uploadWordPressMediaFromUrl(config, themeFirst, {
-      filenameBase: `${pageTitle.trim().toLowerCase().replace(/\s+/g, "-") || "page"}-featured`,
-      altText: altFallback,
-      title: altFallback,
-    });
-  } catch {
-    return null;
-  }
 }
 
 export async function enrichPreparedContentWithPageImages(

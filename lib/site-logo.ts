@@ -9,10 +9,7 @@ import { readStoredLogoFile } from "@/lib/logo-upload-storage";
 import type { PreparedContent } from "@/lib/content-pipeline";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
-import {
-  uploadWordPressMedia,
-  uploadWordPressMediaFromUrl,
-} from "@/lib/wordpress-media";
+import { uploadWordPressMedia } from "@/lib/wordpress-media";
 import { wpRequest } from "@/lib/wordpress-client";
 
 export type ResolvedSiteLogo = {
