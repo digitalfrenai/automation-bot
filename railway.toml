@@ -7,5 +7,5 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "sh scripts/docker-entrypoint.sh"
-healthcheckPath = "/"
+healthcheckPath = "/api/health"
 restartPolicyType = "on_failure"

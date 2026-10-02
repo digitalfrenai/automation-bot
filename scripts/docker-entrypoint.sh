@@ -21,4 +21,10 @@ ls -la "$DATA_ROOT/prisma" 2>/dev/null || echo "Cannot list ${DATA_ROOT}/prisma"
 npx prisma db push
 touch "${DATA_ROOT}/prisma/.write-test" && rm -f "${DATA_ROOT}/prisma/.write-test"
 
-exec npm run start:server
+# Docker/Railway set HOSTNAME to the container id; Next binds to that unless we override.
+export HOSTNAME=0.0.0.0
+export PORT="${PORT:-3000}"
+
+echo "Starting Next.js on ${HOSTNAME}:${PORT}"
+
+exec npx next start -H 0.0.0.0 -p "$PORT"
