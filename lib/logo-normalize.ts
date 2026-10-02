@@ -1,3 +1,5 @@
+import { loadSharp, type SharpFactory } from "@/lib/load-sharp";
+
 const DEFAULT_MAX_WIDTH = 280;
 const DEFAULT_MAX_HEIGHT = 72;
 
@@ -21,9 +23,9 @@ export async function normalizeLogoForSiteHeader(
     return { buffer, mimeType };
   }
 
-  let sharp: (typeof import("sharp"))["default"];
+  let sharp: SharpFactory;
   try {
-    sharp = (await import("sharp")).default;
+    sharp = await loadSharp();
   } catch {
     return { buffer, mimeType };
   }

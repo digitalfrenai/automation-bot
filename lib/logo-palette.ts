@@ -2,6 +2,7 @@ import type { LoadedSiteConfig } from "@/lib/config-loader";
 import { readStoredLogoFile } from "@/lib/logo-upload-storage";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
+import { loadSharp } from "@/lib/load-sharp";
 import { wpRequest } from "@/lib/wordpress-client";
 
 export type LogoPalette = {
@@ -51,7 +52,7 @@ type Bucket = { r: number; g: number; b: number; n: number; sat: number };
 async function sampleLogoPixels(
   buffer: Buffer
 ): Promise<Array<{ r: number; g: number; b: number; a: number }>> {
-  const sharp = (await import("sharp")).default;
+  const sharp = await loadSharp();
   const { data, info } = await sharp(buffer, { density: 144 })
     .resize(80, 80, { fit: "inside" })
     .ensureAlpha()

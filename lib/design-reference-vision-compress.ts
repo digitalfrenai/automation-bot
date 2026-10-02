@@ -1,5 +1,7 @@
 /** Resize/compress reference screenshots before Grok vision (xAI rejects oversized payloads with misleading 500 errors). */
 
+import { loadSharp, type SharpFactory } from "@/lib/load-sharp";
+
 function visionMaxWidth(): number {
   const n = Number(process.env.DESIGN_REFERENCE_VISION_MAX_WIDTH ?? "1400");
   return Number.isFinite(n) && n >= 640 ? Math.floor(n) : 1400;
@@ -25,9 +27,9 @@ async function compressOneForVision(
     );
   }
 
-  let sharp: (typeof import("sharp"))["default"];
+  let sharp: SharpFactory;
   try {
-    sharp = (await import("sharp")).default;
+    sharp = await loadSharp();
   } catch {
     if (buffer.length <= visionMaxBytesPerImage()) {
       return { buffer, mimeType };
