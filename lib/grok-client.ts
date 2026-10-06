@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { Agent, fetch as undiciFetch } from "undici";
 import type { LoadedSiteConfig } from "@/lib/config-loader";
 
 /** Default chat model for content + SEO. Override with XAI_MODEL in .env */
@@ -10,12 +11,19 @@ export function grokTimeoutMs(): number {
   return 900_000;
 }
 
-type UndiciFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit & { dispatcher?: unknown }
-) => Promise<Response>;
+let grokFetchDispatcher: Agent | null = null;
 
-let longFetch: UndiciFetch | null = null;
+function grokFetchAgent(): Agent {
+  if (!grokFetchDispatcher) {
+    const timeoutMs = grokTimeoutMs();
+    grokFetchDispatcher = new Agent({
+      headersTimeout: timeoutMs,
+      bodyTimeout: timeoutMs,
+      connectTimeout: 30_000,
+    });
+  }
+  return grokFetchDispatcher;
+}
 
 /**
  * Node's built-in fetch aborts quiet responses after 5 minutes (headersTimeout).
@@ -25,28 +33,12 @@ async function fetchWithExtendedTimeout(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  if (!longFetch) {
-    const specifier = "undici";
-    const undici = (await import(specifier)) as {
-      Agent: new (opts: {
-        headersTimeout: number;
-        bodyTimeout: number;
-        connectTimeout: number;
-      }) => unknown;
-      fetch: UndiciFetch;
-    };
-    const timeoutMs = grokTimeoutMs();
-    const dispatcher = new undici.Agent({
-      headersTimeout: timeoutMs,
-      bodyTimeout: timeoutMs,
-      connectTimeout: 30_000,
-    });
-    const undiciFetch = undici.fetch;
-    longFetch = (url, nextInit) =>
-      undiciFetch(url, { ...nextInit, dispatcher });
-  }
   try {
-    return await longFetch(input, init);
+    const res = await undiciFetch(input as URL | string, {
+      ...(init as Record<string, unknown>),
+      dispatcher: grokFetchAgent(),
+    } as Parameters<typeof undiciFetch>[1]);
+    return res as unknown as Response;
   } catch (err) {
     if (init?.signal?.aborted) throw err;
     return fetch(input, init);

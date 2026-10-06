@@ -48,11 +48,14 @@ export async function GET() {
     dbError = err instanceof Error ? err.message : "Database query failed";
   }
 
-  const ok = dirWritable && dbQueryOk;
+  const ready = dirWritable && dbQueryOk;
 
+  // Railway (and similar) treat non-2xx health checks as failure and SIGTERM the container.
+  // Always return 200 when this handler runs; use `ready` for DB/volume diagnostics.
   return NextResponse.json(
     {
-      ok,
+      ok: true,
+      ready,
       marker: HEALTH_MARKER,
       gitCommit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
       railwayVolumeMount: process.env.RAILWAY_VOLUME_MOUNT_PATH ?? null,
@@ -65,6 +68,6 @@ export async function GET() {
       dbError,
       uploadThemesDir: process.env.UPLOAD_THEMES_DIR ?? null,
     },
-    { status: ok ? 200 : 503 }
+    { status: 200 }
   );
 }

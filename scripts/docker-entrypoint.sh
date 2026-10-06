@@ -3,10 +3,11 @@ set -e
 
 DATA_ROOT="${RAILWAY_VOLUME_MOUNT_PATH:-/data}"
 
-mkdir -p "$DATA_ROOT/prisma" "$DATA_ROOT/uploads/themes" "$DATA_ROOT/uploads/design-references"
+mkdir -p "$DATA_ROOT/prisma" "$DATA_ROOT/uploads/themes" "$DATA_ROOT/uploads/logos" "$DATA_ROOT/uploads/design-references"
 chmod -R u+rwX "$DATA_ROOT" 2>/dev/null || true
 
 export UPLOAD_THEMES_DIR="${UPLOAD_THEMES_DIR:-$DATA_ROOT/uploads/themes}"
+export UPLOAD_LOGOS_DIR="${UPLOAD_LOGOS_DIR:-$DATA_ROOT/uploads/logos}"
 export UPLOAD_DESIGN_REFERENCES_DIR="${UPLOAD_DESIGN_REFERENCES_DIR:-$DATA_ROOT/uploads/design-references}"
 export DATABASE_URL="file:${DATA_ROOT}/prisma/prod.db"
 

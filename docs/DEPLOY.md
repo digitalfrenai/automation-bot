@@ -38,6 +38,7 @@ This app is **not a good fit for Vercel serverless** as-is (SQLite file, theme u
 7. **Settings → Build** → builder must be **Dockerfile** (or `npm start`, which runs the startup script before Next.js).
 8. Deploy. Logs should begin with `=== wordpress-bot startup ===`, then `prisma db push`, then `Starting Next.js on 0.0.0.0:…`, then `Ready`.
 9. **Networking:** The app listens on Railway’s injected **`PORT`** (often not 3000). Do **not** set `PORT` to `5173` (that is Vite, not this app). In **Settings → Networking → Public domain**, leave **target port** empty (auto) or set it to the same value as `PORT` in deploy logs. If you see `502` / “Application failed to respond”, check logs for `Starting Next.js on 0.0.0.0:` — the port there must match the domain target port.
+10. **Logs:** `Stopping Container` + `npm error signal SIGTERM` on an *old* deploy is normal during a rollout. If the *new* deploy shows `Ready` then stops immediately, check `/api/health` — `ready` should be `true` (volume writable + SQLite query OK).
 
 ---
 

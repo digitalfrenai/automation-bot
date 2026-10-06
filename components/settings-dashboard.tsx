@@ -24,6 +24,7 @@ import {
   type LogMessage,
   type TerminalPipelineStatus,
 } from "@/components/TerminalLogger";
+import { uploadPreviewUrl } from "@/lib/upload-preview-url";
 import {
   DEFAULT_PAGES,
   SINGLE_CONFIG_ID,
@@ -1063,7 +1064,9 @@ export function SettingsDashboard() {
                 </p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={form.businessLogoFilePath || form.businessLogoUrl}
+                  src={uploadPreviewUrl(
+                    form.businessLogoFilePath || form.businessLogoUrl
+                  )}
                   alt="Logo preview"
                   className="max-h-16 max-w-[220px] object-contain"
                 />
@@ -1113,7 +1116,7 @@ export function SettingsDashboard() {
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={p}
+                          src={uploadPreviewUrl(p)}
                           alt="Design reference"
                           className="h-24 w-auto max-w-[160px] object-cover object-top"
                         />
