@@ -10,6 +10,7 @@ import {
 import { assignWordPressReadingSettings } from "@/lib/wordpress-page-roles";
 import { trashDuplicateScaffoldPages } from "@/lib/wordpress-page-cleanup";
 import { syncPrimaryNavigationMenu } from "@/lib/wordpress-menu-sync";
+import { detectContentFormat } from "@/lib/content-format";
 import { loadThemeStyleProfile } from "@/lib/theme-style-profile";
 import {
   fetchAllWpPages,
@@ -37,7 +38,8 @@ export async function executePhase1(
 
   log.info("Phase 1: configuring WordPress site settings…", { phase: "phase1" });
 
-  await loadThemeStyleProfile(config, onLog);
+  const themeProfile = await loadThemeStyleProfile(config, onLog);
+  await detectContentFormat(config, themeProfile, onLog);
 
   try {
     await wpRequest(config, "/wp-json/wp/v2/settings", {

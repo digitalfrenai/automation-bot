@@ -87,6 +87,32 @@ export async function listMenus(
 }
 
 /** Assign theme locations via POST /menus/{id} (menu-locations is read-only). */
+const HEADER_LOCATION_PRIORITY = [
+  "primary",
+  "main",
+  "header",
+  "header-menu",
+  "primary-menu",
+  "main-menu",
+  "secondary",
+  "mobile",
+  "mobile-secondary",
+  "tertiary",
+  "quaternary",
+  "menu-1",
+  "primary_navigation",
+];
+
+/** Slugs registered by the active theme (Braine may not use `primary`). */
+export function pickHeaderMenuLocationSlugs(
+  registered: Record<string, WpMenuLocationEntry>
+): string[] {
+  const slugs = Object.keys(registered);
+  if (slugs.length === 0) return [];
+  const picked = HEADER_LOCATION_PRIORITY.filter((s) => slugs.includes(s));
+  return picked.length > 0 ? picked : slugs.slice(0, 3);
+}
+
 export async function assignMenuThemeLocations(
   config: LoadedSiteConfig,
   menuId: number,
@@ -94,12 +120,11 @@ export async function assignMenuThemeLocations(
 ): Promise<string[]> {
   const registered = await fetchMenuLocations(config);
   const slugs = Object.keys(registered);
+  const fromPreferred = preferredSlugs.filter((s) => slugs.includes(s));
   const targets =
-    preferredSlugs.filter((s) => slugs.includes(s)).length > 0
-      ? preferredSlugs.filter((s) => slugs.includes(s))
-      : slugs.includes("primary")
-        ? ["primary"]
-        : slugs.slice(0, 1);
+    fromPreferred.length > 0
+      ? fromPreferred
+      : pickHeaderMenuLocationSlugs(registered);
 
   if (targets.length === 0) {
     return [];

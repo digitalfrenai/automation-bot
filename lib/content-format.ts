@@ -24,8 +24,14 @@ function contentFormatEnvOverride(): ContentFormat | null {
   return null;
 }
 
-function isKadenceTheme(themeSlug: string, themeName: string): boolean {
-  return /kadence/i.test(themeSlug) || /kadence/i.test(themeName);
+function isKadenceFamilyTheme(profile: ThemeStyleProfile): boolean {
+  const slug = (profile.themeSlug || "").toLowerCase();
+  const name = (profile.themeName || "").toLowerCase();
+  const parent = (profile.parentTemplate || "").toLowerCase();
+  const haystack = `${slug} ${name} ${parent}`;
+  if (/kadence|braine|kt-/.test(haystack)) return true;
+  if (parent === "kadence" || parent.endsWith("/kadence")) return true;
+  return false;
 }
 
 function zipBuilderHints(zipPath: string): { elementor: boolean; divi: boolean } {
@@ -149,6 +155,8 @@ export async function detectContentFormat(
   const themeSlug = (themeProfile.themeSlug || "").toLowerCase();
   const themeName = (themeProfile.themeName || "").toLowerCase();
   const diviTheme = /divi|elegant/.test(themeSlug) || /divi|elegant/.test(themeName);
+  const kadenceFamily = isKadenceFamilyTheme(themeProfile);
+  const kadenceBlocksPlugin = plugins.some((p) => /kadence-blocks|stellarwp\/kadence/.test(p));
 
   const siteSignals = await sampleSiteContent(config);
   if (siteSignals.elementor) reasons.push("existing pages use Elementor");
@@ -157,15 +165,14 @@ export async function detectContentFormat(
 
   let format: ContentFormat = "html";
   const envFormat = contentFormatEnvOverride();
-  const kadence = isKadenceTheme(themeSlug, themeName);
 
   if (envFormat) {
     format = envFormat;
     reasons.push(`CONTENT_FORMAT=${envFormat}`);
-  } else if (kadence) {
+  } else if (kadenceFamily || kadenceBlocksPlugin) {
     format = "gutenberg";
     reasons.push(
-      "Kadence theme — Gutenberg content (Elementor plugin ignored for pipeline pages)"
+      `${themeProfile.themeName || themeProfile.themeSlug || "Active theme"} (Kadence family) — Gutenberg blocks`
     );
   } else if (
     diviPlugin ||
@@ -205,6 +212,8 @@ CRITICAL:
 
 Allowed core blocks only:
 wp:group, wp:columns, wp:column, wp:heading, wp:paragraph, wp:buttons, wp:button, wp:list, wp:image, wp:separator, wp:quote, wp:spacer
+
+Never wrap the whole page in wp:html or dump one giant HTML blob — build real nested core blocks matching REFERENCE MARKUP from the active theme.
 
 Rules:
 - Use wp:group with layout {"type":"constrained"} ONLY — never align full/wide (content must stay inside the theme content column).

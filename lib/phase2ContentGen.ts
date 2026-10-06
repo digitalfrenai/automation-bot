@@ -208,11 +208,22 @@ export async function executePhase2(
   const designImages = await loadDesignReferenceImages(config);
   const hasDesignRef = designImages.length > 0;
   if (hasDesignRef && useTemplateFill) {
-    log.info(
-      "Design reference screenshots set — generating full page layout to match reference (template-fill disabled).",
-      { phase: "phase2", pageTitle, pageId }
-    );
-    useTemplateFill = false;
+    if (
+      genCtx.format === "gutenberg" ||
+      genCtx.format === "elementor" ||
+      genCtx.format === "divi"
+    ) {
+      log.info(
+        "Reference screenshots will guide copy and visual tone; keeping active theme block/template structure.",
+        { phase: "phase2", pageTitle, pageId }
+      );
+    } else {
+      log.info(
+        "Design reference screenshots set — generating full page layout to match reference (template-fill disabled).",
+        { phase: "phase2", pageTitle, pageId }
+      );
+      useTemplateFill = false;
+    }
   } else if (genCtx.screenshotLedDesign) {
     log.info(
       "Screenshot-led mode: no theme zip — page HTML will follow reference screenshots. Grok vision can take several minutes; a timeout retry is normal.",

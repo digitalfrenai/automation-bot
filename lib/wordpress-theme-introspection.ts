@@ -221,9 +221,9 @@ export function themeBrandLayoutHints(stylesheet: string, name?: string): string
       "GeneratePress: alternate white and light-gray band sections (#ffffff / #f7f7f7); card grids in wp:columns; primary CTAs as wp:button with solid fill; keep copy inside constrained groups (theme adds outer grid-container via CSS)."
     );
   }
-  if (/kadence|kt-/.test(slug)) {
+  if (/kadence|kt-|braine/.test(slug)) {
     hints.push(
-      "Kadence: full-width wp:group bands with has-*-background-color; row/column feature cards; dual CTAs in wp:buttons; match Kadence spacing (generous vertical padding on groups)."
+      "Kadence family (incl. Braine child): use core Gutenberg blocks (wp:group, wp:columns, wp:buttons) with has-*-background-color bands; match Kadence spacing — do not dump a single wp:html block or raw HTML page."
     );
   }
   if (/astra|brainstorm/.test(slug)) {

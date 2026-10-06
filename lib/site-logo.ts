@@ -105,10 +105,11 @@ async function uploadLogoToWordPress(
 
 async function applyHeaderLogoCss(
   config: LoadedSiteConfig,
+  logoUrl: string | undefined,
   onLog?: LogSink
 ): Promise<void> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
-  const block = headerLogoCssBlock();
+  const block = headerLogoCssBlock(logoUrl);
 
   try {
     const settings = await wpRequest<{ custom_css?: string }>(
@@ -167,7 +168,7 @@ async function assignWordPressSiteLogo(
     );
     if (settings.site_logo === mediaId) {
       log.info(
-        `WordPress site logo set via REST (media #${mediaId}; drives Kadence/custom_logo through core site_logo sync).`,
+        `WordPress site logo set via REST (media #${mediaId}; synced to theme header via site_logo / custom_logo).`,
         { phase: "phase1" }
       );
       return;
@@ -205,13 +206,13 @@ export async function ensureSiteLogoOnWordPress(
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const alt = `${config.businessName} logo`;
 
-  log.info("Syncing business logo to WordPress (Customizer site logo / Kadence header)…", {
+  log.info("Syncing business logo to WordPress (site logo + header CSS)…", {
     phase: "phase1",
   });
 
   const resolved = await uploadLogoToWordPress(config, alt, onLog);
   await assignWordPressSiteLogo(config, resolved.mediaId, onLog);
-  await applyHeaderLogoCss(config, onLog);
+  await applyHeaderLogoCss(config, resolved.sourceUrl, onLog);
 
   log.info(
     `Logo media #${resolved.mediaId} uploaded. If the header still shows the theme demo (e.g. Braine), run Phase 1 again after saving logo in the dashboard, or set LOGO_FORCE_RESYNC=true once on Railway.`,

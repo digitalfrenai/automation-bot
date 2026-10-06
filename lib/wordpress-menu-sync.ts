@@ -10,6 +10,7 @@ import {
   listMenus,
   menuIdAtLocation,
   menusRestAvailable,
+  pickHeaderMenuLocationSlugs,
   type WpMenuRecord,
 } from "@/lib/wordpress-nav-rest";
 import { wpRequest } from "@/lib/wordpress-client";
@@ -20,21 +21,14 @@ type WpMenuItem = {
 
 const PRIMARY_LOCATION = "primary";
 
-const KADENCE_HEADER_LOCATIONS = [
-  "primary",
-  "secondary",
-  "mobile",
-  "mobile-secondary",
-  "tertiary",
-  "quaternary",
-];
-
 async function resolvePrimaryMenuId(
   config: LoadedSiteConfig
 ): Promise<number | null> {
   const locations = await fetchMenuLocations(config);
-  const atPrimary = menuIdAtLocation(locations, PRIMARY_LOCATION);
-  if (atPrimary) return atPrimary;
+  for (const slug of pickHeaderMenuLocationSlugs(locations)) {
+    const atLoc = menuIdAtLocation(locations, slug);
+    if (atLoc) return atLoc;
+  }
 
   try {
     const menus = await listMenus(config);
@@ -64,9 +58,14 @@ async function ensurePrimaryMenu(
   if (existing) return existing;
 
   const registered = await fetchMenuLocations(config);
-  const headerLocs = KADENCE_HEADER_LOCATIONS.filter((l) =>
-    Object.prototype.hasOwnProperty.call(registered, l)
-  );
+  const headerLocs = pickHeaderMenuLocationSlugs(registered);
+  const createBody: Record<string, unknown> = {
+    name: "Primary",
+    auto_add: false,
+  };
+  if (headerLocs.length > 0) {
+    createBody.locations = headerLocs;
+  }
 
   try {
     const created = await wpRequest<WpMenuRecord>(
@@ -74,11 +73,7 @@ async function ensurePrimaryMenu(
       "/wp-json/wp/v2/menus?context=edit",
       {
         method: "POST",
-        body: JSON.stringify({
-          name: "Primary",
-          locations: headerLocs.length > 0 ? headerLocs : [PRIMARY_LOCATION],
-          auto_add: false,
-        }),
+        body: JSON.stringify(createBody),
       }
     );
     return created?.id ?? null;
@@ -87,7 +82,24 @@ async function ensurePrimaryMenu(
       `Could not create Primary menu via REST: ${formatWordPressApiError(err)}`,
       { phase: "phase1" }
     );
-    return null;
+    if (headerLocs.length === 0) return null;
+    try {
+      const retry = await wpRequest<WpMenuRecord>(
+        config,
+        "/wp-json/wp/v2/menus?context=edit",
+        {
+          method: "POST",
+          body: JSON.stringify({ name: "Primary", auto_add: false }),
+        }
+      );
+      return retry?.id ?? null;
+    } catch (retryErr) {
+      log.warn(
+        `Menu create retry without locations failed: ${formatWordPressApiError(retryErr)}`,
+        { phase: "phase1" }
+      );
+      return null;
+    }
   }
 }
 
@@ -216,6 +228,20 @@ export async function syncPrimaryNavigationMenu(
     return;
   }
 
+  const registeredLocs = await fetchMenuLocations(config);
+  const locSlugs = Object.keys(registeredLocs);
+  if (locSlugs.length > 0) {
+    log.info(
+      `Theme menu locations from REST: ${locSlugs.join(", ")}.`,
+      { phase: "phase1" }
+    );
+  } else {
+    log.warn(
+      "No menu locations returned from REST — menus can still be built but may need manual assignment in Appearance → Menus.",
+      { phase: "phase1" }
+    );
+  }
+
   const menuId = await ensurePrimaryMenu(config, onLog);
   if (!menuId) {
     log.warn(
@@ -261,10 +287,11 @@ export async function syncPrimaryNavigationMenu(
   }
 
   try {
+    const registered = await fetchMenuLocations(config);
     const assigned = await assignMenuThemeLocations(
       config,
       menuId,
-      KADENCE_HEADER_LOCATIONS
+      pickHeaderMenuLocationSlugs(registered)
     );
     if (assigned.length > 0) {
       log.info(

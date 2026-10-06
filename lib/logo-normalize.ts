@@ -48,10 +48,37 @@ export async function normalizeLogoForSiteHeader(
   return { buffer: out, mimeType: "image/png" };
 }
 
-export function headerLogoCssBlock(): string {
+export function headerLogoCssBlock(logoUrl?: string): string {
   const maxH = logoMaxHeight();
   const maxW = logoMaxWidth();
+  const safeUrl = logoUrl?.trim().replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const demoOverride =
+    safeUrl &&
+    `
+.site-branding img[src*="/wp-content/themes/"],
+.site-branding .brand img,
+.site-branding .site-title,
+.site-branding .site-title a {
+  visibility: hidden !important;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+}
+.site-branding > a,
+.site-branding .brand,
+.site-branding .custom-logo-link {
+  display: inline-block !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  min-width: min(${maxW}px, 42vw);
+  min-height: ${maxH}px;
+  background: url("${safeUrl}") no-repeat left center / contain !important;
+}
+`;
   return `/* wp-bot-header-logo */
+${demoOverride ?? ""}
 .site-header .custom-logo,
 .site-header .brand img,
 .site-header .site-logo img,

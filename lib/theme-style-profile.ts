@@ -27,6 +27,8 @@ export type ThemeStyleProfile = {
   source: "none" | "zip" | "live" | "combined";
   themeName?: string;
   themeSlug?: string;
+  /** Parent theme stylesheet (e.g. kadence for Braine child). */
+  parentTemplate?: string;
   isBlockTheme: boolean;
   palette: ThemePaletteSwatch[];
   fonts: string[];
@@ -292,12 +294,18 @@ function addNote(profile: ThemeStyleProfile, note: string) {
 
 async function fetchActiveThemeMeta(
   config: LoadedSiteConfig
-): Promise<{ name?: string; stylesheet?: string; isBlockTheme?: boolean }> {
+): Promise<{
+  name?: string;
+  stylesheet?: string;
+  parentTemplate?: string;
+  isBlockTheme?: boolean;
+}> {
   const record = await fetchActiveThemeRecord(config);
   if (!record) return {};
   return {
     name: record.name,
     stylesheet: record.stylesheet,
+    parentTemplate: record.template,
     isBlockTheme: record.isBlockTheme,
   };
 }
@@ -370,6 +378,7 @@ function mergeProfiles(
       themeSlug: liveIsAuthoritative
         ? live.themeSlug || zip.themeSlug
         : zip.themeSlug || live.themeSlug,
+      parentTemplate: live.parentTemplate || zip.parentTemplate,
       isBlockTheme: live.isBlockTheme || zip.isBlockTheme,
       palette: mergeUnique(
         [
@@ -417,12 +426,18 @@ function mergeProfiles(
 
 function profileFromCss(
   css: string,
-  meta: { name?: string; stylesheet?: string; isBlockTheme?: boolean }
+  meta: {
+    name?: string;
+    stylesheet?: string;
+    parentTemplate?: string;
+    isBlockTheme?: boolean;
+  }
 ): ThemeStyleProfile {
   const profile = emptyProfile();
   profile.source = "live";
   profile.themeName = meta.name;
   profile.themeSlug = meta.stylesheet;
+  profile.parentTemplate = meta.parentTemplate;
   profile.isBlockTheme = Boolean(meta.isBlockTheme);
   profile.cssVariables = extractCssVariables(css);
   applyClassInventory(profile, extractClassCounts(css), []);
@@ -476,6 +491,9 @@ Light inline CSS is allowed only for spacing and layout.`;
   const lines = [
     "ACTIVE THEME STYLE GUIDE (match this look — do not invent a competing design system):",
     `Theme: ${profile.themeName || profile.themeSlug || "uploaded theme"} (${profile.themeSlug || "unknown slug"})`,
+    profile.parentTemplate
+      ? `Parent theme: ${profile.parentTemplate}`
+      : "",
     `Type: ${profile.isBlockTheme ? "block theme (theme.json)" : "classic PHP theme"}`,
     `Profile source: ${profile.source}`,
     paletteLines ? `Palette:\n${paletteLines}` : "",
