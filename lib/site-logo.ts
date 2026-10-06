@@ -10,6 +10,7 @@ import type { PreparedContent } from "@/lib/content-pipeline";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import { uploadWordPressMedia } from "@/lib/wordpress-media";
+import { formatWordPressApiError } from "@/lib/wordpress-nav-rest";
 import { wpRequest } from "@/lib/wordpress-client";
 
 export type ResolvedSiteLogo = {
@@ -151,22 +152,38 @@ async function assignWordPressSiteLogo(
       method: "POST",
       body: JSON.stringify({ site_logo: mediaId }),
     });
-    log.info(`WordPress site logo set (media #${mediaId}).`, { phase: "phase1" });
-    return;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "site_logo failed";
-    log.warn(`Could not set site_logo via REST: ${message}`, { phase: "phase1" });
+    log.warn(
+      `Could not set site_logo via REST: ${formatWordPressApiError(err)}`,
+      { phase: "phase1" }
+    );
+    return;
   }
 
   try {
-    await wpRequest(config, "/wp-json/wp/v2/settings", {
-      method: "POST",
-      body: JSON.stringify({ custom_logo: mediaId }),
-    });
-    log.info(`WordPress custom_logo set (media #${mediaId}).`, { phase: "phase1" });
+    const settings = await wpRequest<{ site_logo?: number }>(
+      config,
+      "/wp-json/wp/v2/settings"
+    );
+    if (settings.site_logo === mediaId) {
+      log.info(
+        `WordPress site logo set via REST (media #${mediaId}; drives Kadence/custom_logo through core site_logo sync).`,
+        { phase: "phase1" }
+      );
+      return;
+    }
+    log.warn(
+      `site_logo POST succeeded but GET returned ${settings.site_logo ?? "empty"} (expected ${mediaId}). Check user can manage_options.`,
+      { phase: "phase1" }
+    );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "custom_logo failed";
-    log.warn(`Could not set custom_logo via REST: ${message}`, { phase: "phase1" });
+    log.info(`WordPress site logo updated (media #${mediaId}).`, {
+      phase: "phase1",
+    });
+    log.warn(
+      `Could not verify site_logo after update: ${formatWordPressApiError(err)}`,
+      { phase: "phase1" }
+    );
   }
 }
 

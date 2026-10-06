@@ -32,6 +32,7 @@ export const DESIGN_REFERENCE_SYSTEM_ADDON = `
 DESIGN REFERENCE SCREENSHOTS (vision):
 The user attached screenshot(s) of a target website design. Your job is to recreate that look in WordPress page content:
 - Match section structure (hero, feature grids, split columns, testimonials, pricing-style blocks, CTAs).
+- Numbered feature/process bands: when screenshots show cream/off-white sections with vertical pill or diamond markers (1, 2, 3…) beside bold headings and gray body copy, recreate that row layout (marker column + text column, not a plain <ol> or generic three-column card grid unless the screenshot uses cards).
 - Match visual rhythm: spacing, heading sizes, card layouts, background bands, button style.
 - Use theme CSS classes and palette from the theme guide when they produce a similar effect.
 - When the theme lacks an equivalent pattern, use semantic HTML (<section>, columns, cards) and minimal inline style on sections (background-color, padding) — never break out of the content column (no 100vw, no negative margins).

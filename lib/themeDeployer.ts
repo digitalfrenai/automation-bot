@@ -2,8 +2,13 @@ import AdmZip from "adm-zip";
 import fs from "fs/promises";
 import path from "path";
 import SftpClient from "ssh2-sftp-client";
-import { Client as SshClient } from "ssh2";
 import { loadSiteConfig } from "@/lib/config-loader";
+import {
+  execRemoteCommand,
+  getRemoteWpRoot,
+  hasRemoteShellCredentials,
+  runRemoteWpCli,
+} from "@/lib/wordpress-ssh";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import { resolveStoredThemePath } from "@/lib/theme-upload-storage";
@@ -16,18 +21,10 @@ export type ThemeDeployResult = {
 };
 
 function getRemotePaths() {
-  const wpRoot = process.env.WP_REMOTE_ROOT ?? "/var/www/html";
+  const wpRoot = getRemoteWpRoot();
   const themesPath =
     process.env.WP_REMOTE_THEMES_PATH ?? `${wpRoot}/wp-content/themes`;
   return { wpRoot, themesPath };
-}
-
-function hasSftpCredentials(config: Awaited<ReturnType<typeof loadSiteConfig>>) {
-  return Boolean(
-    config.sftpHost?.trim() &&
-      config.sftpUsername?.trim() &&
-      config.sftpPassword?.trim()
-  );
 }
 
 export function detectThemeSlugFromZip(localZipPath: string): string {
@@ -64,59 +61,19 @@ export function resolveLocalThemePath(activeThemeZipPath: string): string {
   return resolveStoredThemePath(activeThemeZipPath);
 }
 
-async function execSshCommand(
-  config: Awaited<ReturnType<typeof loadSiteConfig>>,
-  command: string
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  const port = Number(config.sftpPort?.trim() || "22");
-
-  return new Promise((resolve, reject) => {
-    const conn = new SshClient();
-    conn
-      .on("ready", () => {
-        conn.exec(command, (err, stream) => {
-          if (err) {
-            conn.end();
-            reject(err);
-            return;
-          }
-
-          let stdout = "";
-          let stderr = "";
-          stream
-            .on("close", (code: number) => {
-              conn.end();
-              resolve({ stdout, stderr, code: code ?? 1 });
-            })
-            .on("data", (data: Buffer) => {
-              stdout += data.toString();
-            });
-          stream.stderr.on("data", (data: Buffer) => {
-            stderr += data.toString();
-          });
-        });
-      })
-      .on("error", reject)
-      .connect({
-        host: config.sftpHost!.trim(),
-        port,
-        username: config.sftpUsername!.trim(),
-        password: config.sftpPassword!.trim(),
-        readyTimeout: 20000,
-      });
-  });
-}
-
 async function activateThemeViaWpCli(
   config: Awaited<ReturnType<typeof loadSiteConfig>>,
   themeSlug: string,
   log: ReturnType<typeof createPipelineLogger>
 ): Promise<boolean> {
-  const { wpRoot } = getRemotePaths();
-  const command = `wp theme activate ${themeSlug} --path=${wpRoot}`;
-  log.info(`Running remote WP-CLI: ${command}`, { phase: "setup" });
+  log.info(`Running remote WP-CLI: theme activate ${themeSlug}`, {
+    phase: "setup",
+  });
 
-  const result = await execSshCommand(config, command);
+  const result = await runRemoteWpCli(
+    config,
+    `theme activate ${themeSlug}`
+  );
   if (result.code === 0) {
     log.info(`Theme "${themeSlug}" activated via WP-CLI.`, { phase: "setup" });
     return true;
@@ -164,7 +121,7 @@ export async function deployThemeZip(
     return { skipped: true, message };
   }
 
-  if (!hasSftpCredentials(config)) {
+  if (!hasRemoteShellCredentials(config)) {
     const message =
       "SFTP credentials missing; skipping remote theme upload (local zip retained).";
     log.warn(message, { phase: "setup" });
@@ -204,7 +161,7 @@ export async function deployThemeZip(
     const unzipCommand =
       `unzip -o "${remoteZipPath}" -d "${themesPath}" && rm -f "${remoteZipPath}"`;
     log.info("Extracting theme archive on remote server…", { phase: "setup" });
-    const unzipResult = await execSshCommand(config, unzipCommand);
+    const unzipResult = await execRemoteCommand(config, unzipCommand);
 
     if (unzipResult.code !== 0) {
       throw new Error(

@@ -83,7 +83,7 @@ function buildHomePageAddon(
   screenshotLed?: boolean
 ): string {
   const layout = screenshotLed
-    ? `- Mirror the home screenshot layout exactly: stats/ribbon bar, multi-card grids (match item count), split image+text bands, numbered process columns, testimonial grids, and contact/CTA blocks as shown.
+    ? `- Mirror the home screenshot layout exactly: stats/ribbon bar, multi-card grids (match item count), split image+text bands, numbered process/feature rows (vertical pill/diamond numbers on light backgrounds), testimonial grids, and contact/CTA blocks as shown.
 - Use a distinct placehold.co image for every visual slot in the screenshot (often 10+ on home pages).`
     : `- Produce a FULL landing page body with at least 6 distinct sections (hero keeps theme demo images from reference markup, value prop, services overview, benefits, trust/proof, FAQ or process, final CTA).`;
   return `

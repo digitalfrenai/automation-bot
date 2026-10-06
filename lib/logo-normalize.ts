@@ -66,9 +66,45 @@ header .custom-logo-link img,
   height: auto !important;
   object-fit: contain !important;
 }
+.site-branding .custom-logo-link {
+  display: inline-block;
+  line-height: 0;
+}
+.site-branding:has(.custom-logo-link) .site-title,
+.site-branding:has(img.custom-logo) .site-title,
+header.site-header .site-branding .site-title {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
 .site-branding .site-title {
   font-size: clamp(0.85rem, 2vw, 1.05rem);
   line-height: 1.2;
+}
+.site-header .main-navigation,
+.site-header nav.primary-navigation,
+.site-header #site-navigation,
+.site-header .header-navigation {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.25rem;
+}
+.site-header .main-navigation ul.menu,
+.site-header nav.primary-navigation ul {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .site-branding .site-description {
   font-size: 0.75rem;
