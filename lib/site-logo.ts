@@ -188,11 +188,18 @@ export async function ensureSiteLogoOnWordPress(
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const alt = `${config.businessName} logo`;
 
-  log.info("Syncing business logo to WordPress…", { phase: "phase1" });
+  log.info("Syncing business logo to WordPress (Customizer site logo / Kadence header)…", {
+    phase: "phase1",
+  });
 
   const resolved = await uploadLogoToWordPress(config, alt, onLog);
   await assignWordPressSiteLogo(config, resolved.mediaId, onLog);
   await applyHeaderLogoCss(config, onLog);
+
+  log.info(
+    `Logo media #${resolved.mediaId} uploaded. If the header still shows the theme demo (e.g. Braine), run Phase 1 again after saving logo in the dashboard, or set LOGO_FORCE_RESYNC=true once on Railway.`,
+    { phase: "phase1" }
+  );
 
   try {
     await prisma.siteConfig.update({

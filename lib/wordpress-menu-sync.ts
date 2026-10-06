@@ -10,6 +10,7 @@ type WpMenu = {
   name?: string;
   slug?: string;
   locations?: string[];
+  auto_add?: boolean;
 };
 
 type WpMenuItem = {
@@ -20,36 +21,67 @@ type WpMenuItem = {
 
 const PRIMARY_LOCATION = "primary";
 
-const MENU_LOCATION_FALLBACKS = [
+/** Kadence / Braine header locations (subset applied if registered on the site). */
+const KADENCE_HEADER_LOCATIONS = [
   "primary",
+  "secondary",
+  "mobile",
+  "mobile-secondary",
+  "tertiary",
+  "quaternary",
+];
+
+const MENU_LOCATION_FALLBACKS = [
+  ...KADENCE_HEADER_LOCATIONS,
   "main",
   "header",
   "header-menu",
   "primary-menu",
   "main-menu",
   "menu-1",
-  "mobile",
+  "primary_navigation",
   "footer",
 ];
 
-async function assignMenuToThemeLocations(
-  config: LoadedSiteConfig,
-  menuId: number
-): Promise<void> {
-  let locations: Record<string, unknown> | null = null;
+async function listAllMenus(
+  config: LoadedSiteConfig
+): Promise<WpMenu[]> {
   try {
-    locations = await wpRequest<Record<string, unknown>>(
+    const menus = await wpRequest<WpMenu[]>(
+      config,
+      "/wp-json/wp/v2/menus?per_page=100"
+    );
+    return Array.isArray(menus) ? menus : [];
+  } catch {
+    return [];
+  }
+}
+
+async function registeredMenuLocationSlugs(
+  config: LoadedSiteConfig
+): Promise<string[]> {
+  try {
+    const locations = await wpRequest<Record<string, unknown>>(
       config,
       "/wp-json/wp/v2/menu-locations"
     );
+    if (locations && typeof locations === "object") {
+      return Object.keys(locations);
+    }
   } catch {
-    locations = null;
+    /* WP < 6.8 or menus REST disabled */
   }
+  return MENU_LOCATION_FALLBACKS;
+}
 
-  const keys =
-    locations && typeof locations === "object"
-      ? Object.keys(locations)
-      : MENU_LOCATION_FALLBACKS;
+async function assignMenuToThemeLocations(
+  config: LoadedSiteConfig,
+  menuId: number,
+  preferred: string[]
+): Promise<void> {
+  const registered = await registeredMenuLocationSlugs(config);
+  const targets = preferred.filter((loc) => registered.includes(loc));
+  const keys = targets.length > 0 ? targets : registered;
 
   for (const loc of keys) {
     for (const body of [{ menu: menuId }, { menus: menuId }]) {
@@ -63,6 +95,18 @@ async function assignMenuToThemeLocations(
         /* try next body shape / location */
       }
     }
+  }
+
+  try {
+    await wpRequest(config, `/wp-json/wp/v2/menus/${menuId}`, {
+      method: "POST",
+      body: JSON.stringify({
+        locations: targets.length > 0 ? targets : [PRIMARY_LOCATION],
+        auto_add: false,
+      }),
+    });
+  } catch {
+    /* menu update optional */
   }
 }
 
@@ -108,12 +152,17 @@ async function ensurePrimaryMenu(
   const existing = await resolvePrimaryMenuId(config);
   if (existing) return existing;
 
+  const registered = await registeredMenuLocationSlugs(config);
+  const headerLocs = KADENCE_HEADER_LOCATIONS.filter((l) =>
+    registered.includes(l)
+  );
+
   try {
     const created = await wpRequest<WpMenu>(config, "/wp-json/wp/v2/menus", {
       method: "POST",
       body: JSON.stringify({
         name: "Primary",
-        locations: [PRIMARY_LOCATION],
+        locations: headerLocs.length > 0 ? headerLocs : [PRIMARY_LOCATION],
         auto_add: false,
       }),
     });
@@ -138,6 +187,47 @@ async function listMenuItems(
   }
 }
 
+async function clearAllMenuItems(
+  config: LoadedSiteConfig,
+  onLog?: LogSink
+): Promise<void> {
+  const log = createPipelineLogger(onLog ?? (() => undefined));
+  const menus = await listAllMenus(config);
+  let removed = 0;
+
+  for (const menu of menus) {
+    try {
+      await wpRequest(config, `/wp-json/wp/v2/menus/${menu.id}`, {
+        method: "POST",
+        body: JSON.stringify({ auto_add: false }),
+      });
+    } catch {
+      /* ignore */
+    }
+
+    const items = await listMenuItems(config, menu.id);
+    for (const item of items) {
+      try {
+        await wpRequest(
+          config,
+          `/wp-json/wp/v2/menu-items/${item.id}?force=true`,
+          { method: "DELETE" }
+        );
+        removed += 1;
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
+  if (removed > 0) {
+    log.info(
+      `Cleared ${removed} existing menu item(s) (demo/old pages removed from nav).`,
+      { phase: "phase1" }
+    );
+  }
+}
+
 /** Replace primary nav with configured scaffold pages only (short labels). */
 export async function syncPrimaryNavigationMenu(
   config: LoadedSiteConfig,
@@ -148,24 +238,13 @@ export async function syncPrimaryNavigationMenu(
   const menuId = await ensurePrimaryMenu(config);
   if (!menuId) {
     log.warn(
-      "Could not access WordPress menus API — assign Primary menu manually or upgrade WP REST menus.",
+      "Could not access WordPress menus API — assign Primary menu in Appearance → Menus (Kadence: Primary + Mobile), or use WordPress 6.8+ with REST menus enabled.",
       { phase: "phase1" }
     );
     return;
   }
 
-  const existingItems = await listMenuItems(config, menuId);
-  for (const item of existingItems) {
-    try {
-      await wpRequest(
-        config,
-        `/wp-json/wp/v2/menu-items/${item.id}?force=true`,
-        { method: "DELETE" }
-      );
-    } catch {
-      /* best effort */
-    }
-  }
+  await clearAllMenuItems(config, onLog);
 
   let order = 1;
   for (const page of pages) {
@@ -194,10 +273,10 @@ export async function syncPrimaryNavigationMenu(
     }
   }
 
-  await assignMenuToThemeLocations(config, menuId);
+  await assignMenuToThemeLocations(config, menuId, KADENCE_HEADER_LOCATIONS);
 
   log.info(
-    `Primary navigation synced (${pages.length} item(s)) — menu assigned to theme locations; labels follow pagesToBuild (match screenshot nav by configuring those page names).`,
+    `Primary navigation synced (${pages.length} item(s) from Pages to build) — Kadence Primary/Mobile locations updated; auto-add disabled on all menus.`,
     { phase: "phase1" }
   );
 }
