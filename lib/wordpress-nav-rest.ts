@@ -104,13 +104,18 @@ const HEADER_LOCATION_PRIORITY = [
 ];
 
 /** Slugs registered by the active theme (Braine may not use `primary`). */
+function isFooterMenuLocation(slug: string): boolean {
+  return /footer/i.test(slug);
+}
+
 export function pickHeaderMenuLocationSlugs(
   registered: Record<string, WpMenuLocationEntry>
 ): string[] {
-  const slugs = Object.keys(registered);
+  const slugs = Object.keys(registered).filter((s) => !isFooterMenuLocation(s));
   if (slugs.length === 0) return [];
   const picked = HEADER_LOCATION_PRIORITY.filter((s) => slugs.includes(s));
-  return picked.length > 0 ? picked : slugs.slice(0, 3);
+  if (picked.length > 0) return picked;
+  return slugs.slice(0, 1);
 }
 
 export async function assignMenuThemeLocations(

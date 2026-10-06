@@ -10,8 +10,9 @@ import type { PreparedContent } from "@/lib/content-pipeline";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import { uploadWordPressMedia } from "@/lib/wordpress-media";
+import { ensureCustomLogoThemeMod } from "@/lib/wordpress-bot-bridge";
 import { formatWordPressApiError } from "@/lib/wordpress-nav-rest";
-import { wpRequest } from "@/lib/wordpress-client";
+import { normalizeWpUrl, wpRequest } from "@/lib/wordpress-client";
 
 export type ResolvedSiteLogo = {
   mediaId: number;
@@ -20,6 +21,15 @@ export type ResolvedSiteLogo = {
 };
 
 const syncCache = new Map<string, ResolvedSiteLogo>();
+
+function absoluteLogoUrl(wpUrl: string, sourceUrl: string): string {
+  const src = sourceUrl.trim();
+  if (/^https?:\/\//i.test(src)) {
+    return src;
+  }
+  const base = normalizeWpUrl(wpUrl);
+  return src.startsWith("/") ? `${base}${src}` : `${base}/${src}`;
+}
 
 function logoCacheKey(config: LoadedSiteConfig): string {
   return `${config.id}|${config.businessLogoFilePath ?? ""}|${config.businessLogoUrl ?? ""}`;
@@ -212,7 +222,9 @@ export async function ensureSiteLogoOnWordPress(
 
   const resolved = await uploadLogoToWordPress(config, alt, onLog);
   await assignWordPressSiteLogo(config, resolved.mediaId, onLog);
-  await applyHeaderLogoCss(config, resolved.sourceUrl, onLog);
+  await ensureCustomLogoThemeMod(config, resolved.mediaId, onLog);
+  const logoCssUrl = absoluteLogoUrl(config.wpUrl, resolved.sourceUrl);
+  await applyHeaderLogoCss(config, logoCssUrl, onLog);
 
   log.info(
     `Logo media #${resolved.mediaId} uploaded. If the header still shows the theme demo (e.g. Braine), run Phase 1 again after saving logo in the dashboard, or set LOGO_FORCE_RESYNC=true once on Railway.`,

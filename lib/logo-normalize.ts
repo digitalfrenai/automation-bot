@@ -55,26 +55,45 @@ export function headerLogoCssBlock(logoUrl?: string): string {
   const demoOverride =
     safeUrl &&
     `
-.site-branding img[src*="/wp-content/themes/"],
-.site-branding .brand img,
-.site-branding .site-title,
-.site-branding .site-title a {
-  visibility: hidden !important;
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-}
-.site-branding > a,
-.site-branding .brand,
-.site-branding .custom-logo-link {
-  display: inline-block !important;
-  font-size: 0 !important;
-  line-height: 0 !important;
-  min-width: min(${maxW}px, 42vw);
-  min-height: ${maxH}px;
+#masthead.site-header .site-branding,
+#mobile-header .site-branding,
+.site-header-main-section-left .site-branding,
+.site-header .site-branding {
+  position: relative !important;
+  display: block !important;
+  width: min(${maxW}px, 42vw) !important;
+  min-height: ${maxH}px !important;
+  max-height: ${maxH}px !important;
   background: url("${safeUrl}") no-repeat left center / contain !important;
+}
+#masthead .site-branding img,
+#masthead .site-branding svg,
+#masthead .site-branding .site-title,
+#masthead .site-branding .site-title a,
+#masthead .site-branding .brand,
+#masthead .site-branding .brand * ,
+#mobile-header .site-branding img,
+#mobile-header .site-branding svg,
+#mobile-header .site-branding .site-title,
+.site-branding img[src*="/wp-content/themes/"],
+.site-branding img.custom-logo {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  max-width: 1px !important;
+  max-height: 1px !important;
+  overflow: hidden !important;
+  position: absolute !important;
+}
+.site-branding .custom-logo-link img.custom-logo {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  position: static !important;
+  max-width: min(${maxW}px, 42vw) !important;
+  max-height: ${maxH}px !important;
+  width: auto !important;
+  height: auto !important;
 }
 `;
   return `/* wp-bot-header-logo */
