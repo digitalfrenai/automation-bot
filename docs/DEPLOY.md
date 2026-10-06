@@ -20,7 +20,7 @@ This app is **not a good fit for Vercel serverless** as-is (SQLite file, theme u
 1. Push this repo to GitHub.
 2. [Railway](https://railway.com) → **New Project** → **Deploy from GitHub** → select `wordpress-bot`.
 3. Railway detects the **Dockerfile** (see `railway.toml`).
-4. Open the service → **Volumes** → **Add volume** → mount path: **`/data`**
+4. Open the service → **Volumes** → **Add volume** → mount path: **`/data`** (required — without this, dashboard config and uploads reset on every deploy)
 5. **Variables** (optional overrides; Dockerfile defaults shown):
 
    | Variable | Example |
@@ -30,7 +30,7 @@ This app is **not a good fit for Vercel serverless** as-is (SQLite file, theme u
    | `XAI_MODEL` | `grok-4.6` (optional) |
    | `XAI_TIMEOUT_MS` | `900000` (optional) |
 
-   **Important:** Do **not** set `DATABASE_URL=file:./dev.db` on Railway — that causes `Prisma error code 14: Unable to open the database file`. Delete that variable to use the entrypoint default on your volume, or set `file:/data/prisma/prod.db` explicitly.
+   **Important:** Do **not** set `DATABASE_URL=file:./dev.db` on Railway — settings would live on the container filesystem and disappear on redeploy. Delete that variable (the entrypoint sets `file:/data/prisma/prod.db` on the volume). The dashboard shows a storage warning if no volume is detected.
 
    **Volume mount path must be exactly `/data`.** If the volume is mounted elsewhere (e.g. `/app/data`), either change the mount to `/data` or set `DATABASE_URL` to `file:<that-mount>/prisma/prod.db`. The startup script uses `RAILWAY_VOLUME_MOUNT_PATH` when present.
 
@@ -39,6 +39,7 @@ This app is **not a good fit for Vercel serverless** as-is (SQLite file, theme u
 8. Deploy. Logs should begin with `=== wordpress-bot startup ===`, then `prisma db push`, then `Starting Next.js on 0.0.0.0:…`, then `Ready`.
 9. **Networking:** The app listens on Railway’s injected **`PORT`** (often not 3000). Do **not** set `PORT` to `5173` (that is Vite, not this app). In **Settings → Networking → Public domain**, leave **target port** empty (auto) or set it to the same value as `PORT` in deploy logs. If you see `502` / “Application failed to respond”, check logs for `Starting Next.js on 0.0.0.0:` — the port there must match the domain target port.
 10. **Logs:** `Stopping Container` + `npm error signal SIGTERM` on an *old* deploy is normal during a rollout. If the *new* deploy shows `Ready` then stops immediately, check `/api/health` — `ready` should be `true` (volume writable + SQLite query OK).
+11. **15-minute limit:** Railway closes each HTTP/SSE request after **~15 minutes** (Pro included). Phase 2/3 in the dashboard runs **one request per page** automatically. A single heavy page (screenshot vision + many AI images) can still hit the cap — run that page alone or lower `PAGE_IMAGES_MAX_PER_PAGE` / set `PAGE_IMAGES_AI=false` to use theme assets only.
 
 ---
 

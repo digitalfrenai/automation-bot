@@ -11,9 +11,10 @@ import {
 } from "@/lib/wordpress-page-roles";
 import { runSeoAudit, truncateMeta } from "@/lib/seo-audit";
 import {
-  countVisibleImages,
+  countSwappableImagesInHtml,
   enrichPreparedContentWithPageImages,
-  planPageImageSlots,
+  htmlHasUnfilledImagePlaceholders,
+  resolvePageImageSlots,
 } from "@/lib/page-image-enrichment";
 import { replaceWordPressPageContent } from "@/lib/wordpress-page-content";
 import { pageDisplayTitle } from "@/lib/page-display-title";
@@ -57,19 +58,18 @@ export async function executePhase3(
     html: publishHtml,
   };
 
-  const imageSlots = planPageImageSlots(pageTitle, {
+  const brief = {
     businessName: config.businessName,
     niche: config.niche,
     targetAudience: config.targetAudience,
     toneOfVoice: config.toneOfVoice,
     coreServices: config.coreServicesList,
-  });
-  if (
-    imageSlots.length > 0 &&
-    countVisibleImages(publishHtml) < imageSlots.length
-  ) {
+  };
+  const imageSlots = resolvePageImageSlots(publishHtml, pageTitle, brief);
+  const swappable = countSwappableImagesInHtml(publishHtml);
+  if (imageSlots.length > 0 && htmlHasUnfilledImagePlaceholders(publishHtml)) {
     log.info(
-      `Phase 3: adding page images (${countVisibleImages(publishHtml)}/${imageSlots.length} present)…`,
+      `Phase 3: adding page images (${swappable} placeholder/demo slot(s), plan ${imageSlots.length})…`,
       { phase: "phase3", pageTitle, pageId }
     );
     const withImages = await enrichPreparedContentWithPageImages(
@@ -80,13 +80,7 @@ export async function executePhase3(
         auditHtml: publishHtml,
       },
       pageTitle,
-      {
-        businessName: config.businessName,
-        niche: config.niche,
-        targetAudience: config.targetAudience,
-        toneOfVoice: config.toneOfVoice,
-        coreServices: config.coreServicesList,
-      },
+      brief,
       pageId,
       onLog
     );

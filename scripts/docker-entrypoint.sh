@@ -13,9 +13,15 @@ export DATABASE_URL="file:${DATA_ROOT}/prisma/prod.db"
 
 echo "=== wordpress-bot startup ==="
 echo "RAILWAY_VOLUME_MOUNT_PATH=${RAILWAY_VOLUME_MOUNT_PATH:-<not set>}"
+if [ -n "$RAILWAY_ENVIRONMENT" ] || [ -n "$RAILWAY_PROJECT_ID" ]; then
+  if [ -z "$RAILWAY_VOLUME_MOUNT_PATH" ]; then
+    echo "WARNING: No Railway volume — SQLite config and uploads will NOT survive redeploys. Mount a volume at /data."
+  fi
+fi
 echo "DATA_ROOT=${DATA_ROOT}"
 echo "DATABASE_URL=${DATABASE_URL}"
 echo "UPLOAD_THEMES_DIR=${UPLOAD_THEMES_DIR}"
+echo "UPLOAD_LOGOS_DIR=${UPLOAD_LOGOS_DIR}"
 ls -la "$DATA_ROOT" 2>/dev/null || echo "Cannot list ${DATA_ROOT}"
 ls -la "$DATA_ROOT/prisma" 2>/dev/null || echo "Cannot list ${DATA_ROOT}/prisma"
 

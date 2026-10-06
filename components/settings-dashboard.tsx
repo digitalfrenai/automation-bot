@@ -366,6 +366,13 @@ export function SettingsDashboard() {
             e2eIncludeSocial: data.config.e2eIncludeSocial !== false,
           });
         }
+        if (
+          data.storage &&
+          data.storage.persistentStorageOk === false &&
+          data.storage.warning
+        ) {
+          setBanner({ type: "error", message: data.storage.warning });
+        }
         await loadJobHistory();
       } catch {
         setBanner({ type: "error", message: "Could not load saved configuration." });
@@ -540,17 +547,26 @@ export function SettingsDashboard() {
   const streamPipeline = async (
     endpoint: string,
     body: Record<string, unknown>,
-    successMessage: string
-  ) => {
-    setIsPipelineRunning(true);
-    setPipelineStatus("RUNNING");
-    setLogs([]);
-    setBanner({
-      type: "info",
-      message: "Pipeline started. Streaming logs below…",
-    });
+    successMessage: string,
+    options?: { appendLogs?: boolean; manageRunningState?: boolean }
+  ): Promise<boolean> => {
+    const manageRunning = options?.manageRunningState !== false;
+    if (manageRunning) {
+      setIsPipelineRunning(true);
+      setPipelineStatus("RUNNING");
+    }
+    if (!options?.appendLogs) {
+      setLogs([]);
+    }
+    if (manageRunning) {
+      setBanner({
+        type: "info",
+        message: "Pipeline started. Streaming logs below…",
+      });
+    }
 
     let failed = false;
+    let completed = false;
 
     try {
       const saveRes = await fetch("/api/config", {
@@ -569,7 +585,7 @@ export function SettingsDashboard() {
         });
         setBanner({ type: "error", message });
         failed = true;
-        return;
+        return false;
       }
 
       const res = await fetch(endpoint, {
@@ -588,13 +604,12 @@ export function SettingsDashboard() {
         });
         setBanner({ type: "error", message });
         failed = true;
-        return;
+        return false;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let completed = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -627,10 +642,12 @@ export function SettingsDashboard() {
               phase: "complete",
               message: "Pipeline finished — status COMPLETED.",
             });
-            setBanner({
-              type: "success",
-              message: successMessage,
-            });
+            if (successMessage.trim()) {
+              setBanner({
+                type: "success",
+                message: successMessage,
+              });
+            }
             continue;
           }
 
@@ -663,6 +680,7 @@ export function SettingsDashboard() {
           level: "error",
           message: "Pipeline stream ended unexpectedly.",
         });
+        failed = true;
       }
     } catch {
       setPipelineStatus("FAILED");
@@ -672,6 +690,62 @@ export function SettingsDashboard() {
         message: "Pipeline stream disconnected.",
       });
       setBanner({ type: "error", message: "Pipeline stream disconnected." });
+      failed = true;
+    } finally {
+      if (manageRunning) {
+        setIsPipelineRunning(false);
+        await loadJobHistory();
+      }
+    }
+
+    return completed && !failed;
+  };
+
+  const runPhaseForEachPage = async (
+    endpoint: string,
+    phaseLabel: string,
+    successMessage: string
+  ) => {
+    const pages =
+      form.pagesToBuild.length > 0 ? form.pagesToBuild : [...DEFAULT_PAGES];
+
+    setIsPipelineRunning(true);
+    setPipelineStatus("RUNNING");
+    setLogs([]);
+    setBanner({
+      type: "info",
+      message: `${phaseLabel} — ${pages.length} page(s), one Railway request each (15 min max per page).`,
+    });
+
+    try {
+      for (let i = 0; i < pages.length; i++) {
+        const pageTitle = pages[i]!;
+        appendLog({
+          timestamp: new Date().toISOString(),
+          level: "info",
+          phase: "setup",
+          message: `——— ${phaseLabel}: ${pageTitle} (${i + 1}/${pages.length}) ———`,
+          pageTitle,
+        });
+
+        const ok = await streamPipeline(
+          endpoint,
+          { configId: SINGLE_CONFIG_ID, pageTitle },
+          i === pages.length - 1 ? successMessage : "",
+          { appendLogs: true, manageRunningState: false }
+        );
+
+        if (!ok) {
+          setBanner({
+            type: "error",
+            message: `${phaseLabel} stopped at "${pageTitle}". Finished pages are saved — re-run to continue.`,
+          });
+          setPipelineStatus("FAILED");
+          return;
+        }
+      }
+
+      setPipelineStatus("COMPLETED");
     } finally {
       setIsPipelineRunning(false);
       await loadJobHistory();
@@ -695,17 +769,17 @@ export function SettingsDashboard() {
   };
 
   const launchPhase2 = async () => {
-    await streamPipeline(
+    await runPhaseForEachPage(
       "/api/run-phase2",
-      { configId: SINGLE_CONFIG_ID },
+      "Phase 2",
       "Phase 2 content generation completed."
     );
   };
 
   const launchPhase3 = async () => {
-    await streamPipeline(
+    await runPhaseForEachPage(
       "/api/run-phase3",
-      { configId: SINGLE_CONFIG_ID },
+      "Phase 3",
       "Phase 3 SEO publish completed."
     );
   };

@@ -11,10 +11,18 @@ export const maxDuration = 900;
 export async function POST(request: NextRequest) {
   let configId = SINGLE_CONFIG_ID;
 
+  let pageTitle: string | undefined;
+
   try {
-    const body = (await request.json()) as { configId?: string };
+    const body = (await request.json()) as {
+      configId?: string;
+      pageTitle?: string;
+    };
     if (body.configId?.trim()) {
       configId = body.configId.trim();
+    }
+    if (body.pageTitle?.trim()) {
+      pageTitle = body.pageTitle.trim();
     }
   } catch {
     /* default */
@@ -22,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   return createPipelineSseResponse(async (onLog) => {
     try {
-      await runSiteBuildPhase2(configId, onLog);
+      await runSiteBuildPhase2(configId, onLog, pageTitle ? { pageTitle } : undefined);
     } catch (err) {
       try {
         await updateSiteStatus(configId, "FAILED");

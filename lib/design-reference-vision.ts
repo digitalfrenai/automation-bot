@@ -48,7 +48,10 @@ SCREENSHOT-LED MODE (no theme zip was uploaded):
 - Team/card social icons: 40px circles with inline SVG (Facebook/X/Instagram/LinkedIn). Never output letter labels like "f", "x", or play triangles as social buttons.
 - Wrap the page in a single outer <div style="max-width:1200px;margin:0 auto;"> if needed so layout stays inside the editor content column (no 100vw, no negative margins).
 - The screenshots show desktop; the output must still be mobile-friendly: grids via repeat(auto-fit, minmax(min(100%, 280px), 1fr)), flex-wrap:wrap, clamp() font sizes, no fixed heights or px column widths.
-- Use https://placehold.co/WxH placeholder images with descriptive alt text until images are enriched — do not embed screenshot photos. Photos must be <img> tags in the layout slot, never CSS background-image.`;
+- Use https://placehold.co/WxH placeholder images with descriptive alt text until images are enriched — do not embed screenshot photos. Photos must be <img> tags in the layout slot, never CSS background-image.
+- Include one <img> for every photo region in the screenshot (hero, each card thumbnail, split-column images, workshop/feature bands, testimonial avatars if shown as photos). Typical home pages need 8–15 images — do not stop at three.
+- Preserve section order and grid counts from the screenshot (e.g. 6-card service grid = six cards each with its own image, 4-step process = four columns, 2×2 testimonials = four blocks).
+- Match column structure, background bands (dark/light alternation), and spacing — do not collapse the layout into a generic single-column blog.`;
 
 export function designReferenceSystemAddon(config: LoadedSiteConfig): string {
   if (!hasDesignReferenceScreenshots(config)) return "";
@@ -73,7 +76,7 @@ ${paletteHint}`.trim();
 
 export function designReferenceUserPreamble(config: LoadedSiteConfig): string {
   if (isScreenshotLedDesignMode(config)) {
-    return `No custom theme zip was uploaded — treat the attached screenshot(s) as the full page design spec (layout, colors, components). Recreate that design in HTML for the WordPress content area. Use the business brief for all text only.`;
+    return `No custom theme zip was uploaded — treat the attached screenshot(s) as the full page design spec (layout, colors, components). Recreate that design section-by-section in HTML for the WordPress content area (same order, same grids, same image slots). Use the business brief for all text only. The WordPress theme header menu is synced separately — do not omit major content sections because they appear in the screenshot header/footer chrome.`;
   }
   return `The attached image(s) show the reference website design to follow (layout + visual style only).
 

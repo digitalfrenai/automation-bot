@@ -15,6 +15,7 @@ import {
 import {
   generateGrokImage,
   pageImagesEnabled,
+  pageImagesMaxPerPage,
   pageImagesUseAi,
 } from "@/lib/grok-images";
 import { createGrokClient } from "@/lib/grok-client";
@@ -72,6 +73,100 @@ function basePhotoRules(
 
 export function countVisibleImages(html: string): number {
   return (html.match(/<img\b/gi) ?? []).length;
+}
+
+function aspectRatioFromPlaceholdSrc(src: string, index: number): string {
+  const m = src.match(/placehold\.co\/(\d+)x(\d+)/i);
+  if (m) {
+    const w = Number(m[1]);
+    const h = Number(m[2]);
+    if (w > 0 && h > 0) {
+      const ratio = w / h;
+      if (ratio >= 1.65) return "16:9";
+      if (ratio <= 0.85) return "3:4";
+      if (ratio >= 1.2) return "4:3";
+      return "1:1";
+    }
+  }
+  return index === 0 ? "16:9" : "4:3";
+}
+
+function altFromImgAttrs(attrs: string, fallback: string): string {
+  const m = attrs.match(/\balt=(["'])(.*?)\1/i);
+  const alt = m?.[2]?.trim();
+  return alt && alt.length > 2 ? alt : fallback;
+}
+
+/** Images Grok marked with placeholders or theme demo URLs — each needs a real upload. */
+export function countSwappableImagesInHtml(html: string): number {
+  let count = 0;
+  const re = /<img\b([^>]*?)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const attrs = m[1] ?? "";
+    const srcMatch = attrs.match(/\bsrc=(["'])(.*?)\1/i);
+    const src = srcMatch?.[2] ?? "";
+    if (shouldSwapImgSrc(attrs, src)) count++;
+  }
+  return count;
+}
+
+export function htmlHasUnfilledImagePlaceholders(html: string): boolean {
+  return countSwappableImagesInHtml(html) > 0;
+}
+
+function planPageImageSlotsFromHtml(
+  html: string,
+  pageTitle: string,
+  brief: Brief,
+  matchDesignReference?: boolean,
+  brandColors?: string
+): PageImageSlot[] {
+  const max = pageImagesMaxPerPage();
+  const slots: PageImageSlot[] = [];
+  const re = /<img\b([^>]*?)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    if (slots.length >= max) break;
+    const attrs = m[1] ?? "";
+    const srcMatch = attrs.match(/\bsrc=(["'])(.*?)\1/i);
+    const src = srcMatch?.[2] ?? "";
+    if (!shouldSwapImgSrc(attrs, src)) continue;
+    const index = slots.length;
+    const alt = altFromImgAttrs(
+      attrs,
+      index === 0
+        ? `${brief.businessName} — ${pageTitle}`
+        : `${pageTitle} section image ${index + 1}`
+    );
+    slots.push({
+      id: `content-img-${index + 1}`,
+      role: index === 0 ? "hero" : "section",
+      aspectRatio: aspectRatioFromPlaceholdSrc(src, index),
+      alt,
+      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Marketing photo for "${pageTitle}" (image ${index + 1} in page layout). Match the reference screenshot composition for this slot.`,
+    });
+  }
+  return slots;
+}
+
+/** Prefer HTML-derived slots (every placeholder/demo img); fall back to fixed theme-demo plan. */
+export function resolvePageImageSlots(
+  html: string,
+  pageTitle: string,
+  brief: Brief,
+  matchDesignReference?: boolean,
+  brandColors?: string
+): PageImageSlot[] {
+  const fromHtml = planPageImageSlotsFromHtml(
+    html,
+    pageTitle,
+    brief,
+    matchDesignReference,
+    brandColors
+  );
+  if (fromHtml.length > 0) return fromHtml;
+  return planPageImageSlots(pageTitle, brief, matchDesignReference, brandColors);
 }
 
 export function planPageImageSlots(
@@ -612,7 +707,13 @@ export async function enrichPreparedContentWithPageImages(
   const brandColors = logoPalette
     ? `${logoPalette.primary}, ${logoPalette.secondary}, ${logoPalette.accent}`
     : undefined;
-  const slots = planPageImageSlots(pageTitle, brief, matchDesignRef, brandColors);
+  const slots = resolvePageImageSlots(
+    contentHtml,
+    pageTitle,
+    brief,
+    matchDesignRef,
+    brandColors
+  );
 
   if (slots.length === 0) {
     return prepared;

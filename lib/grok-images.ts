@@ -24,6 +24,13 @@ export function pageImagesUseAi(): boolean {
   return true;
 }
 
+/** Cap AI/theme image uploads per page (screenshot layouts can need many slots). */
+export function pageImagesMaxPerPage(): number {
+  const n = Number(process.env.PAGE_IMAGES_MAX_PER_PAGE ?? "16");
+  if (!Number.isFinite(n) || n < 1) return 16;
+  return Math.min(24, Math.floor(n));
+}
+
 export async function generateGrokImage(
   config: LoadedSiteConfig,
   prompt: string,

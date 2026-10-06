@@ -9,6 +9,7 @@ import {
   siteConfigToClient,
   type SiteConfigInput,
 } from "@/lib/site-config";
+import { getStoragePersistenceInfo } from "@/lib/storage-persistence";
 
 function buildConfigData(body: SiteConfigInput) {
   const pagesToBuild = parseStringArray(body.pagesToBuild);
@@ -46,11 +47,13 @@ export async function GET() {
       where: { id: SINGLE_CONFIG_ID },
     });
 
+    const storage = getStoragePersistenceInfo();
+
     if (!config) {
-      return NextResponse.json({ config: null });
+      return NextResponse.json({ config: null, storage });
     }
 
-    return NextResponse.json({ config: siteConfigToClient(config) });
+    return NextResponse.json({ config: siteConfigToClient(config), storage });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load config.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -85,7 +88,10 @@ export async function POST(request: NextRequest) {
       update: data,
     });
 
-    return NextResponse.json({ config: siteConfigToClient(config) });
+    return NextResponse.json({
+      config: siteConfigToClient(config),
+      storage: getStoragePersistenceInfo(),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to save config.";
     return NextResponse.json({ error: message }, { status: 500 });

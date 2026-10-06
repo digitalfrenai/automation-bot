@@ -88,19 +88,48 @@ export async function runSiteBuildPhase1(
   return pages;
 }
 
+export type SiteBuildPageFilter = {
+  /** Run Phase 2/3 for a single scaffold title only (avoids Railway 15-minute HTTP limit). */
+  pageTitle?: string;
+};
+
+function filterScaffoldPages(
+  pages: ScaffoledPage[],
+  filter?: SiteBuildPageFilter
+): ScaffoledPage[] {
+  const title = filter?.pageTitle?.trim();
+  if (!title) return pages;
+  const lower = title.toLowerCase();
+  const match = pages.filter(
+    (p) =>
+      p.title.toLowerCase() === lower ||
+      p.scaffoldTitle.toLowerCase() === lower
+  );
+  if (match.length === 0) {
+    throw new Error(
+      `No scaffold page matches pageTitle "${title}". Check Pages to build and Phase 1.`
+    );
+  }
+  return match;
+}
+
 export async function runSiteBuildPhase2(
   configId: string,
-  onLog: LogSink
+  onLog: LogSink,
+  filter?: SiteBuildPageFilter
 ): Promise<void> {
   await loadSiteConfig(configId);
-  const pages = await loadScaffoldPagesForSiteBuild(configId);
+  const allPages = await loadScaffoldPagesForSiteBuild(configId);
+  const pages = filterScaffoldPages(allPages, filter);
 
   await updateSiteStatus(configId, "POPULATING");
   onLog({
     timestamp: new Date().toISOString(),
     level: "info",
     phase: "phase2",
-    message: `Phase 2 started — generating content for ${pages.length} page(s).`,
+    message: filter?.pageTitle
+      ? `Phase 2 started — generating content for "${filter.pageTitle}" only (1 page).`
+      : `Phase 2 started — generating content for ${pages.length} page(s).`,
   });
 
   for (const page of pages) {
@@ -123,23 +152,29 @@ export async function runSiteBuildPhase2(
     timestamp: new Date().toISOString(),
     level: "info",
     phase: "complete",
-    message: "Phase 2 completed — page content saved (draft). Run Phase 3 to SEO-check and publish.",
+    message: filter?.pageTitle
+      ? `Phase 2 completed for "${filter.pageTitle}". Run Phase 2 for other pages or Phase 3 to publish.`
+      : "Phase 2 completed — page content saved (draft). Run Phase 3 to SEO-check and publish.",
   });
 }
 
 export async function runSiteBuildPhase3(
   configId: string,
-  onLog: LogSink
+  onLog: LogSink,
+  filter?: SiteBuildPageFilter
 ): Promise<void> {
   const config = await loadSiteConfig(configId);
-  const pages = await loadScaffoldPagesForSiteBuild(configId);
+  const allPages = await loadScaffoldPagesForSiteBuild(configId);
+  const pages = filterScaffoldPages(allPages, filter);
 
   await updateSiteStatus(configId, "PUBLISHING");
   onLog({
     timestamp: new Date().toISOString(),
     level: "info",
     phase: "phase3",
-    message: `Phase 3 started — SEO validation and publish for ${pages.length} page(s).`,
+    message: filter?.pageTitle
+      ? `Phase 3 started — SEO validation and publish for "${filter.pageTitle}" only.`
+      : `Phase 3 started — SEO validation and publish for ${pages.length} page(s).`,
   });
 
   for (const page of pages) {
@@ -177,14 +212,16 @@ export async function runSiteBuildPhase3(
     );
   }
 
-  await syncPrimaryNavigationMenu(config, pages, onLog);
+  await syncPrimaryNavigationMenu(config, allPages, onLog);
 
   await updateSiteStatus(configId, "COMPLETED");
   onLog({
     timestamp: new Date().toISOString(),
     level: "info",
     phase: "complete",
-    message: "Phase 3 completed — pages SEO-validated and published.",
+    message: filter?.pageTitle
+      ? `Phase 3 completed for "${filter.pageTitle}". Run Phase 3 for remaining pages if needed.`
+      : "Phase 3 completed — pages SEO-validated and published.",
   });
 }
 

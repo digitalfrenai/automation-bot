@@ -20,6 +20,52 @@ type WpMenuItem = {
 
 const PRIMARY_LOCATION = "primary";
 
+const MENU_LOCATION_FALLBACKS = [
+  "primary",
+  "main",
+  "header",
+  "header-menu",
+  "primary-menu",
+  "main-menu",
+  "menu-1",
+  "mobile",
+  "footer",
+];
+
+async function assignMenuToThemeLocations(
+  config: LoadedSiteConfig,
+  menuId: number
+): Promise<void> {
+  let locations: Record<string, unknown> | null = null;
+  try {
+    locations = await wpRequest<Record<string, unknown>>(
+      config,
+      "/wp-json/wp/v2/menu-locations"
+    );
+  } catch {
+    locations = null;
+  }
+
+  const keys =
+    locations && typeof locations === "object"
+      ? Object.keys(locations)
+      : MENU_LOCATION_FALLBACKS;
+
+  for (const loc of keys) {
+    for (const body of [{ menu: menuId }, { menus: menuId }]) {
+      try {
+        await wpRequest(config, `/wp-json/wp/v2/menu-locations/${loc}`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        break;
+      } catch {
+        /* try next body shape / location */
+      }
+    }
+  }
+}
+
 async function resolvePrimaryMenuId(
   config: LoadedSiteConfig
 ): Promise<number | null> {
@@ -148,8 +194,10 @@ export async function syncPrimaryNavigationMenu(
     }
   }
 
+  await assignMenuToThemeLocations(config, menuId);
+
   log.info(
-    `Primary navigation synced (${pages.length} item(s)) — theme menu matches pagesToBuild.`,
+    `Primary navigation synced (${pages.length} item(s)) — menu assigned to theme locations; labels follow pagesToBuild (match screenshot nav by configuring those page names).`,
     { phase: "phase1" }
   );
 }

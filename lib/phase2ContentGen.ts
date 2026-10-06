@@ -57,7 +57,7 @@ function buildUserPrompt(
   screenshotLed?: boolean
 ): string {
   const structureLine = screenshotLed
-    ? `Structure the page to match the reference screenshots (hero, sections, grids, cards, trust/CTA blocks). Use inline CSS where needed for colors and layout.`
+    ? `Structure the page to match the reference screenshots section-by-section (same order, same grid column counts, same dark/light bands). Every photo area in the screenshot must become an <img src="https://placehold.co/WxH"> with WxH proportional to that region — include ALL card/service/process images, not just a hero. Use inline CSS where needed for colors and layout fidelity.`
     : `Structure the page with hero (reuse theme demo banner/image URLs from reference markup when available), value proposition, services/benefits, social proof or trust section, and a strong closing CTA section (not a site footer).
 Use the same visual block pattern for every section (group → headings → columns/buttons) so the page looks like one theme design, not plain text in some areas and cards in others.
 If the system prompt includes REFERENCE MARKUP from the active theme, mirror that block structure and class names exactly (swap text only).`;
@@ -75,15 +75,22 @@ The on-page H1 must be a single compelling headline — not an SEO title with pi
 Make copy specific to the niche and audience.${logoLine ? `\n${logoLine}` : ""}`;
 }
 
-function buildHomePageAddon(brief: {
-  businessName: string;
-  coreServices: string[];
-}): string {
+function buildHomePageAddon(
+  brief: {
+    businessName: string;
+    coreServices: string[];
+  },
+  screenshotLed?: boolean
+): string {
+  const layout = screenshotLed
+    ? `- Mirror the home screenshot layout exactly: stats/ribbon bar, multi-card grids (match item count), split image+text bands, numbered process columns, testimonial grids, and contact/CTA blocks as shown.
+- Use a distinct placehold.co image for every visual slot in the screenshot (often 10+ on home pages).`
+    : `- Produce a FULL landing page body with at least 6 distinct sections (hero keeps theme demo images from reference markup, value prop, services overview, benefits, trust/proof, FAQ or process, final CTA).`;
   return `
 
 This is the SITE HOME / FRONT PAGE (main landing page visitors see first).
 Requirements:
-- Produce a FULL landing page body with at least 6 distinct sections (hero keeps theme demo images from reference markup, value prop, services overview, benefits, trust/proof, FAQ or process, final CTA).
+${layout}
 - Minimum ~800 words of visible copy across sections (not counting HTML tags).
 - Highlight ${brief.businessName} and primary services: ${brief.coreServices.join(", ") || "core offerings"}.
 - Do NOT output only a slim hero plus header/footer-like chrome — the theme supplies navigation and footer.`;
@@ -104,7 +111,7 @@ function buildUserPromptForPage(
 ): string {
   const base = buildUserPrompt(pageTitle, brief, logoLine, screenshotLed);
   if (isHomePage(pageTitle)) {
-    return base + buildHomePageAddon(brief);
+    return base + buildHomePageAddon(brief, screenshotLed);
   }
   return base;
 }
