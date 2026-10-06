@@ -78,8 +78,14 @@ export function getStoragePersistenceInfo(): StoragePersistenceInfo {
   const persistentStorageOk = !railway || Boolean(volumeMountPath);
   let warning: string | null = null;
   if (railway && !volumeMountPath) {
-    warning =
-      "Railway volume not mounted at /data — dashboard settings and uploads are reset on every deploy. Add a volume (mount path /data) and redeploy once.";
+    const dbVar = process.env.DATABASE_URL?.trim() ?? "";
+    if (dbVar === "/data" || dbVar === "data" || dbVar === "/data/") {
+      warning =
+        'Remove the DATABASE_URL variable ("/data" is not a database path). Open this service → Volumes → Add volume → mount path /data. That creates persistent disk; Variables do not.';
+    } else {
+      warning =
+        "No Railway volume detected (RAILWAY_VOLUME_MOUNT_PATH is unset). Service → Volumes → Add volume → mount path /data → redeploy. Do not use Variables instead of a volume.";
+    }
   } else if (railway && volumeMountPath && volumeMountPath !== "/data") {
     warning = `Volume is mounted at ${volumeMountPath} (OK if intentional). Recommended mount path is /data.`;
   }

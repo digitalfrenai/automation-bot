@@ -20,7 +20,7 @@ This app is **not a good fit for Vercel serverless** as-is (SQLite file, theme u
 1. Push this repo to GitHub.
 2. [Railway](https://railway.com) → **New Project** → **Deploy from GitHub** → select `wordpress-bot`.
 3. Railway detects the **Dockerfile** (see `railway.toml`).
-4. Open the service → **Volumes** → **Add volume** → mount path: **`/data`** (required — without this, dashboard config and uploads reset on every deploy)
+4. Open the **service** (wordpress-bot) → **Volumes** tab → **Add volume** → mount path: **`/data`** (required — without this, dashboard config and uploads reset on every deploy). This is **persistent disk**, not a Variable. Do **not** set `DATABASE_URL=/data` in Variables — delete that if present.
 5. **Variables** (optional overrides; Dockerfile defaults shown):
 
    | Variable | Example |

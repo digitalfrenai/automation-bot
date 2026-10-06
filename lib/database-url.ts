@@ -49,6 +49,14 @@ export function prepareDatabaseUrl(): string {
   const onRailway =
     isRailwayRuntime() || Boolean(process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim());
   let url = process.env.DATABASE_URL?.trim() ?? "";
+  if (
+    url === "/data" ||
+    url === "/data/" ||
+    url === "data" ||
+    !url.startsWith("file:")
+  ) {
+    url = "";
+  }
 
   if (
     onRailway ||
