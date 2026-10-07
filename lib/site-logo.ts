@@ -222,14 +222,28 @@ export async function ensureSiteLogoOnWordPress(
 
   const resolved = await uploadLogoToWordPress(config, alt, onLog);
   await assignWordPressSiteLogo(config, resolved.mediaId, onLog);
-  await ensureCustomLogoThemeMod(config, resolved.mediaId, onLog);
   const logoCssUrl = absoluteLogoUrl(config.wpUrl, resolved.sourceUrl);
+  const themeLogo = await ensureCustomLogoThemeMod(
+    config,
+    resolved.mediaId,
+    onLog,
+    logoCssUrl
+  );
   await applyHeaderLogoCss(config, logoCssUrl, onLog);
 
-  log.info(
-    `Logo media #${resolved.mediaId} uploaded. If the header still shows the theme demo (e.g. Braine), run Phase 1 again after saving logo in the dashboard, or set LOGO_FORCE_RESYNC=true once on Railway.`,
-    { phase: "phase1" }
-  );
+  if (themeLogo.braine && themeLogo.ok) {
+    log.info(
+      `Logo media #${resolved.mediaId} is now Braine's header, mobile, and footer logo.`,
+      { phase: "phase1" }
+    );
+  } else if (themeLogo.braine) {
+    log.warn(
+      `Logo media #${resolved.mediaId} was uploaded, but Braine's header is still its own logo.svg. Phase 1 will try again on the next page.`,
+      { phase: "phase1" }
+    );
+  } else {
+    log.info(`Logo media #${resolved.mediaId} uploaded.`, { phase: "phase1" });
+  }
 
   try {
     await prisma.siteConfig.update({
@@ -240,7 +254,9 @@ export async function ensureSiteLogoOnWordPress(
     /* optional cache */
   }
 
-  syncCache.set(cacheKey, resolved);
+  if (!themeLogo.braine || themeLogo.ok) {
+    syncCache.set(cacheKey, resolved);
+  }
   return resolved;
 }
 

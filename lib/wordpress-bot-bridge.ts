@@ -4,14 +4,61 @@ import SftpClient from "ssh2-sftp-client";
 import type { LoadedSiteConfig } from "@/lib/config-loader";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
+import { detectThemeSlugFromZip, resolveLocalThemePath } from "@/lib/themeDeployer";
 import { formatWordPressApiError } from "@/lib/wordpress-nav-rest";
+import { fetchActiveThemeRecord } from "@/lib/wordpress-theme-introspection";
 import {
   getRemoteWpRoot,
   hasRemoteShellCredentials,
+  runRemoteWpCli,
+  shellSingleQuote,
 } from "@/lib/wordpress-ssh";
-import { WordPressApiError, wpRequest } from "@/lib/wordpress-client";
+import { normalizeWpUrl, WordPressApiError, wpRequest } from "@/lib/wordpress-client";
 
 const BRIDGE_ROUTE = "/wp-json/wordpress-bot/v1/theme-mod/custom_logo";
+const BRAINE_BRIDGE_VERSION = 2;
+
+type CustomLogoBridgeResult = {
+  custom_logo?: number;
+  site_logo?: number;
+  stylesheet?: string;
+  template?: string;
+  bridge_version?: number;
+  braine_logo?: string;
+};
+
+function themeLooksLikeBraine(
+  stylesheet?: string,
+  template?: string,
+  name?: string
+): boolean {
+  const haystack = `${stylesheet ?? ""} ${template ?? ""} ${name ?? ""}`.toLowerCase();
+  return haystack.includes("braine");
+}
+
+function configuredZipLooksLikeBraine(config: LoadedSiteConfig): boolean {
+  const zipPath = config.activeThemeZipPath?.trim();
+  if (!zipPath) return false;
+  try {
+    const slug = detectThemeSlugFromZip(resolveLocalThemePath(zipPath));
+    return slug.toLowerCase().includes("braine");
+  } catch {
+    return false;
+  }
+}
+
+function phpDoubleQuoted(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, "\\$");
+}
+
+function braineLogoApplied(result: CustomLogoBridgeResult): boolean {
+  const braine = themeLooksLikeBraine(result.stylesheet, result.template);
+  if (!braine) return true;
+  return (
+    (result.bridge_version ?? 0) >= BRAINE_BRIDGE_VERSION &&
+    Boolean(result.braine_logo?.trim())
+  );
+}
 
 function bridgePluginLocalPath(): string {
   return path.join(
@@ -96,30 +143,45 @@ export async function deployWordPressBotRestBridge(
 export async function setCustomLogoViaRestBridge(
   config: LoadedSiteConfig,
   mediaId: number,
-  onLog?: LogSink
+  onLog?: LogSink,
+  sourceUrl?: string
 ): Promise<boolean> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
 
   try {
-    const result = await wpRequest<{
-      custom_logo?: number;
-      site_logo?: number;
-    }>(config, BRIDGE_ROUTE, {
+    const result = await wpRequest<CustomLogoBridgeResult>(config, BRIDGE_ROUTE, {
       method: "POST",
-      body: JSON.stringify({ media_id: mediaId }),
+      body: JSON.stringify({
+        media_id: mediaId,
+        source_url: sourceUrl ?? "",
+      }),
     });
-    if (result.custom_logo === mediaId) {
-      log.info(
-        `Kadence/Braine custom_logo theme mod set via REST bridge (media #${mediaId}).`,
+    if (result.custom_logo !== mediaId) {
+      log.warn(
+        `REST bridge responded but custom_logo is ${result.custom_logo ?? "empty"} (expected ${mediaId}).`,
         { phase: "phase1" }
       );
-      return true;
+      return false;
     }
-    log.warn(
-      `REST bridge responded but custom_logo is ${result.custom_logo ?? "empty"} (expected ${mediaId}).`,
-      { phase: "phase1" }
-    );
-    return false;
+    if (!braineLogoApplied(result)) {
+      log.warn(
+        "REST bridge set custom_logo, but Braine still needs light_color_logo / dark_color_logo in braine_options-mods. Redeploying the bridge plugin.",
+        { phase: "phase1" }
+      );
+      return false;
+    }
+    if (result.braine_logo?.trim()) {
+      log.info(
+        `Braine header and footer logos set from the uploaded file (media #${mediaId}).`,
+        { phase: "phase1" }
+      );
+    } else {
+      log.info(
+        `custom_logo theme mod set via REST bridge (media #${mediaId}).`,
+        { phase: "phase1" }
+      );
+    }
+    return true;
   } catch (err) {
     const message = formatWordPressApiError(err);
     if (message.includes("404")) {
@@ -130,28 +192,133 @@ export async function setCustomLogoViaRestBridge(
   }
 }
 
+async function applyBraineLogoViaWpCli(
+  config: LoadedSiteConfig,
+  mediaId: number,
+  sourceUrl: string,
+  onLog?: LogSink
+): Promise<boolean> {
+  const log = createPipelineLogger(onLog ?? (() => undefined));
+  const php = `if (function_exists('wordpress_bot_apply_braine_logo')) { $saved = wordpress_bot_apply_braine_logo(${mediaId}, "${phpDoubleQuoted(sourceUrl)}"); echo ($saved !== '') ? 'BRAINE_LOGO_OK' : 'BRAINE_LOGO_FAIL'; } else { echo 'BRAINE_LOGO_MISSING'; }`;
+  try {
+    const result = await runRemoteWpCli(config, `eval ${shellSingleQuote(php)}`);
+    if (result.stdout.includes("BRAINE_LOGO_OK")) {
+      log.info(
+        `Braine header and footer logos set via WP-CLI (media #${mediaId}).`,
+        { phase: "phase1" }
+      );
+      return true;
+    }
+    log.warn(
+      `WP-CLI could not write Braine logo options: ${(result.stderr || result.stdout).trim() || "no output"}`,
+      { phase: "phase1" }
+    );
+    return false;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "WP-CLI logo update failed";
+    log.warn(`WP-CLI Braine logo update failed: ${message}`, { phase: "phase1" });
+    return false;
+  }
+}
+
+function localWordPressRootCandidates(wpUrl: string): string[] {
+  let host = "";
+  try {
+    host = new URL(normalizeWpUrl(wpUrl)).hostname.toLowerCase();
+  } catch {
+    return [];
+  }
+  const home = process.env.USERPROFILE || process.env.HOME || "";
+  if (!home || !host) return [];
+  const slug = host.replace(/\.local$/i, "");
+  const names = [...new Set([slug, host].filter(Boolean))];
+  return names.map((name) =>
+    path.join(home, "Local Sites", name, "app", "public")
+  );
+}
+
+/** Local WP (*.local) has no SFTP in the dashboard, but the site files are on this machine. */
+export async function deployWordPressBotRestBridgeLocally(
+  config: LoadedSiteConfig,
+  onLog?: LogSink
+): Promise<boolean> {
+  const log = createPipelineLogger(onLog ?? (() => undefined));
+  const localPlugin = bridgePluginLocalPath();
+  try {
+    await fs.access(localPlugin);
+  } catch {
+    return false;
+  }
+
+  for (const root of localWordPressRootCandidates(config.wpUrl)) {
+    const contentDir = path.join(root, "wp-content");
+    try {
+      await fs.access(contentDir);
+    } catch {
+      continue;
+    }
+    const destDir = path.join(contentDir, "mu-plugins");
+    const dest = path.join(destDir, "wordpress-bot-rest-bridge.php");
+    try {
+      await fs.mkdir(destDir, { recursive: true });
+      await fs.copyFile(localPlugin, dest);
+      log.info(
+        "Installed the logo bridge into this computer's Local WordPress site so Braine can swap its header logo.",
+        { phase: "phase1" }
+      );
+      return true;
+    } catch (err) {
+      log.warn(
+        `Could not copy the logo bridge into the local WordPress site: ${err instanceof Error ? err.message : "copy failed"}`,
+        { phase: "phase1" }
+      );
+    }
+  }
+  return false;
+}
+
 export async function ensureCustomLogoThemeMod(
   config: LoadedSiteConfig,
   mediaId: number,
-  onLog?: LogSink
-): Promise<void> {
+  onLog?: LogSink,
+  sourceUrl?: string
+): Promise<{ ok: boolean; braine: boolean }> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
+  const activeTheme = await fetchActiveThemeRecord(config);
+  const braine =
+    themeLooksLikeBraine(
+      activeTheme?.stylesheet,
+      activeTheme?.template,
+      activeTheme?.name
+    ) || configuredZipLooksLikeBraine(config);
+
+  const trySet = () =>
+    setCustomLogoViaRestBridge(config, mediaId, onLog, sourceUrl);
 
   if (await isWordPressBotBridgeAvailable(config)) {
-    if (await setCustomLogoViaRestBridge(config, mediaId, onLog)) {
-      return;
-    }
+    if (await trySet()) return { ok: true, braine };
   }
 
+  let deployed = false;
   if (hasRemoteShellCredentials(config)) {
-    await deployWordPressBotRestBridge(config, onLog);
-    if (await setCustomLogoViaRestBridge(config, mediaId, onLog)) {
-      return;
+    deployed = await deployWordPressBotRestBridge(config, onLog);
+  }
+  if (!deployed && braine) {
+    deployed = await deployWordPressBotRestBridgeLocally(config, onLog);
+  }
+  if (deployed && (await trySet())) return { ok: true, braine };
+
+  if (braine && sourceUrl?.trim() && hasRemoteShellCredentials(config)) {
+    if (await applyBraineLogoViaWpCli(config, mediaId, sourceUrl.trim(), onLog)) {
+      return { ok: true, braine };
     }
   }
 
   log.info(
-    "Using core site_logo REST only — install SFTP credentials to auto-deploy the REST bridge mu-plugin so Kadence/Braine custom_logo updates in the Customizer.",
+    braine
+      ? "Braine is still showing its own logo.svg. The uploaded file is in the media library, but Braine's header reads light_color_logo / dark_color_logo. Add SFTP credentials, or run this app on the same computer as the Local site, then run Phase 1 again."
+      : "Using core site_logo REST only — install SFTP credentials to auto-deploy the REST bridge mu-plugin so the theme custom_logo updates in the Customizer.",
     { phase: "phase1" }
   );
+  return { ok: false, braine };
 }

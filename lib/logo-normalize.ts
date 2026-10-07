@@ -95,6 +95,26 @@ export function headerLogoCssBlock(logoUrl?: string): string {
   width: auto !important;
   height: auto !important;
 }
+header.main-header .logo-box .logo a,
+.mobile-menu .nav-logo a,
+footer .footer-logo a {
+  background: url("${safeUrl}") no-repeat left center / contain !important;
+  display: inline-block !important;
+  width: min(${maxW}px, 42vw) !important;
+  min-height: ${maxH}px !important;
+  height: ${maxH}px !important;
+}
+header.main-header .logo-box .logo img,
+.mobile-menu .nav-logo img,
+footer .footer-logo img {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  max-width: 1px !important;
+  max-height: 1px !important;
+  overflow: hidden !important;
+  position: absolute !important;
+}
 `;
   return `/* wp-bot-header-logo */
 ${demoOverride ?? ""}
