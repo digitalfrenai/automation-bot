@@ -7,6 +7,15 @@
 type SharpOutput = {
   rotate(): SharpOutput;
   resize(width?: number, height?: number, options?: object): SharpOutput;
+  composite(
+    images: Array<{
+      input: Buffer | string;
+      left?: number;
+      top?: number;
+      blend?: string;
+      gravity?: string;
+    }>
+  ): SharpOutput;
   jpeg(options?: object): SharpOutput;
   png(options?: object): SharpOutput;
   ensureAlpha(): SharpOutput;
