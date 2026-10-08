@@ -67,7 +67,7 @@ export async function watermarkImageWithLogo(
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer();
 
-  return { buffer: out, mimeType: "image/jpeg" };
+  return { buffer: Buffer.from(out), mimeType: "image/jpeg" };
 }
 
 export async function canWatermarkSocialImages(

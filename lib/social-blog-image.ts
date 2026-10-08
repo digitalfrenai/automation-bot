@@ -39,17 +39,15 @@ export async function prepareWatermarkedBlogImageForSocial(
   }
   const rawMime =
     imageRes.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
-  const rawBuffer = Buffer.from(await imageRes.arrayBuffer());
-
-  let uploadBuffer = rawBuffer;
+  let uploadBuffer: Buffer = Buffer.from(await imageRes.arrayBuffer());
   let uploadMime = rawMime;
 
   if (await canWatermarkSocialImages(config)) {
     const logo = await loadBusinessLogoBuffer(config);
     if (logo) {
       try {
-        const marked = await watermarkImageWithLogo(rawBuffer, logo);
-        uploadBuffer = marked.buffer;
+        const marked = await watermarkImageWithLogo(uploadBuffer, logo);
+        uploadBuffer = Buffer.from(marked.buffer);
         uploadMime = marked.mimeType;
         log.info("Applied business logo watermark to the blog share image.", {
           phase: "phase6",
