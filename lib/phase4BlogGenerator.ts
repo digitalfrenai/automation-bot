@@ -102,7 +102,7 @@ Services: ${brief.coreServices.join(", ") || "N/A"}
 Related keywords: ${brief.targetKeywords.join(", ") || "N/A"}
 
 Use article-style layout inside the theme content width (no full-bleed heroes or viewport breakout CSS). Headings, links, and image alt text.
-Include 3–4 real <img> tags in the body (one after the intro and one under each major H2). Use src="https://placehold.co/800x450" placeholders — the automation replaces them with photos. Do not use text-on-image graphics or orange banner-style cards as images.`;
+Include 3–4 real <img> tags in the body (one after the intro and one under each major H2). Use src="https://placehold.co/800x450" placeholders only — automation replaces them with text-free photos. Never embed headings, slogans, or words inside images (no banner cards, no orange text blocks).`;
 }
 
 function parseTopics(text: string, limit: number): BlogTopic[] {

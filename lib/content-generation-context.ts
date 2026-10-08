@@ -100,6 +100,7 @@ Blog structure (article layout — NOT a landing page):
 - Constrained wp:group sections only — no align full/wide, no viewport breakout CSS.
 - Intro, body, takeaways, closing CTA block (simple group + buttons, same content width as body text).
 - Every wp:image must include alt text.
+- Use https://placehold.co/… src on wp:image blocks only — never fake photos made of colored boxes with text, slogans, or typography inside the image.
 - Add 2–4 internal links (/about, /services, /contact).
 ${includeExternal ? "- Add 1–2 reputable external links with rel=\"noopener noreferrer\" target=\"_blank\"." : "- Do not add external links."}
 - 800–1200 words of visible copy.`;
@@ -130,7 +131,7 @@ Structure requirements:
 - Multiple <h2> sections with logical <h3> subheads where useful.
 - Intro, body sections, practical takeaways, and a closing CTA.
 - Use semantic markup: <article> or <section>, <p>, <ul>, <ol>, <a>, <blockquote>, <figure>/<img> placeholders.
-- Every <img> must include descriptive alt text (use placeholder src like https://placehold.co/800x450 if needed).
+- Every <img> must include descriptive alt text (use placeholder src like https://placehold.co/800x450 if needed). Never use text-on-image banner graphics as <img> — real photos are uploaded later.
 - Add 2–4 internal links using relative paths such as /about, /services, /contact (based on typical site pages).
 ${includeExternal ? "- Add 1–2 reputable external links (e.g. industry standards, government, or well-known educational sources) with rel=\"noopener noreferrer\" target=\"_blank\"." : "- Do not add external links."}
 - Write 800–1200 words of visible copy.

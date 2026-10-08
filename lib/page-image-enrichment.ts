@@ -14,6 +14,7 @@ import {
 } from "@/lib/gutenberg-content";
 import {
   generateGrokImage,
+  imagePromptVisualSubject,
   pageImagesEnabled,
   pageImagesMaxPerPage,
   pageImagesUseAi,
@@ -144,7 +145,7 @@ function planPageImageSlotsFromHtml(
       role: index === 0 ? "hero" : "section",
       aspectRatio: aspectRatioFromPlaceholdSrc(src, index),
       alt,
-      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Marketing photo for "${pageTitle}" (image ${index + 1} in page layout). Match the reference screenshot composition for this slot.`,
+      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Scene related to ${imagePromptVisualSubject(pageTitle)} — layout image ${index + 1}. Match reference composition for this slot if provided.`,
     });
   }
   return slots;
@@ -245,7 +246,7 @@ export function planPageImageSlots(
       role: "hero",
       aspectRatio: "16:9",
       alt: `${pageTitle} — ${brief.businessName}`,
-      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Page hero image matching theme demo style for "${pageTitle}".`,
+      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Page hero image matching theme demo style; subject: ${imagePromptVisualSubject(pageTitle)}.`,
     },
   ];
 }

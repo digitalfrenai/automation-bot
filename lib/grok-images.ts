@@ -11,14 +11,28 @@ export type GeneratedImage = {
   revisedPrompt?: string;
 };
 
+const IMAGE_NO_TEXT_PREFIX =
+  "Untitled stock photo. No visible text, letters, numbers, signs, captions, UI, posters, or watermarks anywhere in the image. ";
+
 /** Appended to every Imagine prompt — models often render garbled copy from long titles. */
 export const IMAGE_NO_TEXT_SUFFIX =
-  " CRITICAL: The image must contain zero text, typography, letters, numbers, words, captions, signage, UI labels, posters, or watermarks. Pure photography or illustration only—headlines are added separately on the website.";
+  " Do not paint or render any words. No readable screens, documents, brochures, or branded signage. Pure scene and objects only—website headlines are HTML overlays, not part of the image.";
+
+/** Short visual hint for prompts — long titles become misspelled text in generated images. */
+export function imagePromptVisualSubject(hint: string, maxWords = 10): string {
+  const cleaned = hint.replace(/[^\w\s-]/g, " ").replace(/\s+/g, " ").trim();
+  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, maxWords);
+  return words.join(" ") || "professional business environment";
+}
 
 export function withImageNoTextRules(prompt: string): string {
   const trimmed = prompt.trim();
-  if (trimmed.toLowerCase().includes("zero text")) return trimmed;
-  return `${trimmed}${IMAGE_NO_TEXT_SUFFIX}`;
+  if (!trimmed) return IMAGE_NO_TEXT_PREFIX.trim() + IMAGE_NO_TEXT_SUFFIX.trim();
+  const lower = trimmed.toLowerCase();
+  const hasPrefix = lower.startsWith("untitled stock photo");
+  const hasSuffix = lower.includes("do not paint or render any words");
+  if (hasPrefix && hasSuffix) return trimmed;
+  return `${hasPrefix ? "" : IMAGE_NO_TEXT_PREFIX}${trimmed}${hasSuffix ? "" : IMAGE_NO_TEXT_SUFFIX}`;
 }
 
 export function pageImagesEnabled(): boolean {
@@ -41,22 +55,17 @@ export function pageImagesMaxPerPage(): number {
   return Math.min(24, Math.floor(n));
 }
 
-export async function generateGrokImage(
-  config: LoadedSiteConfig,
+async function requestGrokImage(
+  client: OpenAI,
   prompt: string,
-  options?: {
-    aspectRatio?: string;
-    client?: OpenAI;
-  }
+  aspectRatio?: string
 ): Promise<GeneratedImage> {
-  const client = options?.client ?? createGrokClient(config);
-
   const response = (await client.images.generate({
     model: XAI_IMAGE_MODEL,
     prompt: withImageNoTextRules(prompt),
     n: 1,
     response_format: "b64_json",
-    ...(options?.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
+    ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
   } as Parameters<OpenAI["images"]["generate"]>[0])) as {
     data?: Array<{
       b64_json?: string;
@@ -82,4 +91,16 @@ export async function generateGrokImage(
     revisedPrompt:
       typeof item.revised_prompt === "string" ? item.revised_prompt : undefined,
   };
+}
+
+export async function generateGrokImage(
+  config: LoadedSiteConfig,
+  prompt: string,
+  options?: {
+    aspectRatio?: string;
+    client?: OpenAI;
+  }
+): Promise<GeneratedImage> {
+  const client = options?.client ?? createGrokClient(config);
+  return requestGrokImage(client, prompt, options?.aspectRatio);
 }
