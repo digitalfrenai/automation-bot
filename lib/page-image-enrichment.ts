@@ -689,14 +689,22 @@ async function fillRemainingSlotsWithAi(
   return out;
 }
 
+export type PageImageEnrichmentOptions = {
+  /** Blog posts set featured media via title banner — do not overwrite. */
+  skipFeaturedMedia?: boolean;
+  phase?: "phase2" | "phase4";
+};
+
 export async function enrichPreparedContentWithPageImages(
   config: LoadedSiteConfig,
   prepared: PreparedContent,
   pageTitle: string,
   brief: Brief,
   pageId: number,
-  onLog?: LogSink
+  onLog?: LogSink,
+  options?: PageImageEnrichmentOptions
 ): Promise<PreparedContent> {
+  const logPhase = options?.phase ?? "phase2";
   if (!pageImagesEnabled()) {
     return prepared;
   }
@@ -732,7 +740,7 @@ export async function enrichPreparedContentWithPageImages(
 
   log.info(
     `Page images: ${slotsToFill.length} slot(s) for "${pageTitle}" (theme catalog: ${catalog.length}, AI fallback: ${pageImagesUseAi() ? "on" : "off"})…`,
-    { phase: "phase2", pageTitle, pageId }
+    { phase: logPhase, pageTitle, pageId }
   );
 
   let uploaded = await fillSlotsFromThemeCatalog(
@@ -757,13 +765,13 @@ export async function enrichPreparedContentWithPageImages(
   } else if (uploaded.length < slotsToFill.length) {
     log.warn(
       "Some image slots unfilled (theme upload failed and PAGE_IMAGES_AI=false).",
-      { phase: "phase2", pageTitle, pageId }
+      { phase: logPhase, pageTitle, pageId }
     );
   }
 
   if (uploaded.length === 0) {
     log.warn("No images uploaded for this page; content saved without images.", {
-      phase: "phase2",
+      phase: logPhase,
       pageTitle,
       pageId,
     });
@@ -772,21 +780,23 @@ export async function enrichPreparedContentWithPageImages(
 
   const enriched = applyUploadedImages(prepared, uploaded);
 
-  const hero = uploaded.find((u) => u.role === "hero") ?? uploaded[0];
-  try {
-    await setPageFeaturedMedia(config, pageId, hero.media.id);
-    log.info(`Set featured image (media #${hero.media.id}) on page ${pageId}.`, {
-      phase: "phase2",
-      pageTitle,
-      pageId,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "featured_media failed";
-    log.warn(`Could not set featured image: ${message}`, {
-      phase: "phase2",
-      pageTitle,
-      pageId,
-    });
+  if (!options?.skipFeaturedMedia) {
+    const hero = uploaded.find((u) => u.role === "hero") ?? uploaded[0];
+    try {
+      await setPageFeaturedMedia(config, pageId, hero.media.id);
+      log.info(`Set featured image (media #${hero.media.id}) on page ${pageId}.`, {
+        phase: logPhase,
+        pageTitle,
+        pageId,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "featured_media failed";
+      log.warn(`Could not set featured image: ${message}`, {
+        phase: logPhase,
+        pageTitle,
+        pageId,
+      });
+    }
   }
 
   return enriched;

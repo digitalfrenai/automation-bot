@@ -24,6 +24,7 @@ import {
   listPostTags,
 } from "@/lib/blog-category";
 import { assignBlogTitleBanner } from "@/lib/blog-title-banner";
+import { enrichPreparedContentWithPageImages } from "@/lib/page-image-enrichment";
 import {
   createWordPressPost,
   replaceWordPressPostContent,
@@ -100,7 +101,8 @@ Tone: ${brief.toneOfVoice}
 Services: ${brief.coreServices.join(", ") || "N/A"}
 Related keywords: ${brief.targetKeywords.join(", ") || "N/A"}
 
-Use article-style layout inside the theme content width (no full-bleed heroes or viewport breakout CSS). Headings, links, and image alt text.`;
+Use article-style layout inside the theme content width (no full-bleed heroes or viewport breakout CSS). Headings, links, and image alt text.
+Include 3–4 real <img> tags in the body (one after the intro and one under each major H2). Use src="https://placehold.co/800x450" placeholders — the automation replaces them with photos. Do not use text-on-image graphics or orange banner-style cards as images.`;
 }
 
 function parseTopics(text: string, limit: number): BlogTopic[] {
@@ -261,7 +263,7 @@ export async function generateAndPublishBlogPost(
     throw new Error(`Grok returned empty content for topic "${topic.topic}".`);
   }
 
-  const prepared = prepareContentFromGrok(raw, genCtx.format, onLog, {
+  let prepared = prepareContentFromGrok(raw, genCtx.format, onLog, {
     pageTitle: topic.topic,
     phase: "phase4",
   });
@@ -275,6 +277,22 @@ export async function generateAndPublishBlogPost(
 
   await assignPostCategory(config, draftPost.id, topic.category, onLog);
   await assignPostTags(config, draftPost.id, topic.tags, onLog);
+
+  prepared = await enrichPreparedContentWithPageImages(
+    config,
+    prepared,
+    topic.topic,
+    {
+      businessName: config.businessName,
+      niche: config.niche,
+      targetAudience: config.targetAudience,
+      toneOfVoice: config.toneOfVoice,
+      coreServices: config.coreServicesList,
+    },
+    draftPost.id,
+    onLog,
+    { skipFeaturedMedia: true, phase: "phase4" }
+  );
 
   let html = await savePreparedPostContent(config, draftPost.id, prepared);
 
