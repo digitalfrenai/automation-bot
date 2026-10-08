@@ -11,6 +11,16 @@ export type GeneratedImage = {
   revisedPrompt?: string;
 };
 
+/** Appended to every Imagine prompt — models often render garbled copy from long titles. */
+export const IMAGE_NO_TEXT_SUFFIX =
+  " CRITICAL: The image must contain zero text, typography, letters, numbers, words, captions, signage, UI labels, posters, or watermarks. Pure photography or illustration only—headlines are added separately on the website.";
+
+export function withImageNoTextRules(prompt: string): string {
+  const trimmed = prompt.trim();
+  if (trimmed.toLowerCase().includes("zero text")) return trimmed;
+  return `${trimmed}${IMAGE_NO_TEXT_SUFFIX}`;
+}
+
 export function pageImagesEnabled(): boolean {
   const flag = process.env.PAGE_IMAGES_ENABLED?.trim().toLowerCase();
   if (flag === "0" || flag === "false" || flag === "no") return false;
@@ -43,7 +53,7 @@ export async function generateGrokImage(
 
   const response = (await client.images.generate({
     model: XAI_IMAGE_MODEL,
-    prompt,
+    prompt: withImageNoTextRules(prompt),
     n: 1,
     response_format: "b64_json",
     ...(options?.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),

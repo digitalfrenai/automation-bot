@@ -6,18 +6,22 @@ import { titleToSlug } from "@/lib/wordpress-client";
 import { uploadWordPressMedia } from "@/lib/wordpress-media";
 import {
   activeThemeIsBraine,
+  applyPostTitleBannerViaWpCli,
   ensureBotBridgeInstalled,
 } from "@/lib/wordpress-bot-bridge";
+import { hasRemoteShellCredentials } from "@/lib/wordpress-ssh";
 import { wpRequest } from "@/lib/wordpress-client";
 
 const BANNER_ROUTE = "/wp-json/wordpress-bot/v1/post-banner";
 
-function bannerPrompt(topic: string, niche: string, businessName: string): string {
+/** Visual-only scene — never repeat the post title (Imagine tends to paint it as misspelled text). */
+function bannerPrompt(keyword: string, niche: string, businessName: string): string {
   return [
-    "Wide photographic website banner, no text, no letters, no logo, no watermark.",
-    `Scene that illustrates this blog topic: ${topic}.`,
-    `Business: ${businessName}. Niche: ${niche}.`,
-    "Photorealistic, slightly dark so a white headline can sit on top, 16:9 composition.",
+    "Wide cinematic photograph for a blog header background.",
+    `Depict only objects and environment related to: ${keyword}.`,
+    `Industry: ${niche}. Brand context: ${businessName}.`,
+    "Workshop or studio scene, photorealistic, slightly dark for a white HTML headline overlay, 16:9.",
+    "No computer monitors with readable text, no brochures, no banners, no painted slogans.",
   ].join(" ");
 }
 
@@ -53,18 +57,34 @@ async function saveBraineTitleBanner(
   }
 
   const installed = await ensureBotBridgeInstalled(config, onLog);
-  if (!installed) return false;
-  try {
-    const result = await send();
-    return Boolean(result.banner?.trim());
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "banner save failed";
-    log.warn(`Could not save the blog title background: ${message}`, {
-      phase: "phase4",
-      pageId: postId,
-    });
-    return false;
+  if (installed) {
+    try {
+      const result = await send();
+      if (result.banner?.trim()) return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "banner save failed";
+      log.warn(`Blog title banner REST retry failed: ${message}`, {
+        phase: "phase4",
+        pageId: postId,
+      });
+    }
   }
+
+  if (hasRemoteShellCredentials(config)) {
+    return applyPostTitleBannerViaWpCli(
+      config,
+      postId,
+      mediaId,
+      sourceUrl,
+      onLog
+    );
+  }
+
+  log.warn(
+    "Braine needs the wordpress-bot REST bridge mu-plugin on the live site (wp-content/mu-plugins/wordpress-bot-rest-bridge.php). Add SFTP in the dashboard so Phase 4 can install it, or upload that file manually, then re-run Phase 4.",
+    { phase: "phase4", pageId: postId }
+  );
+  return false;
 }
 
 export async function assignBlogTitleBanner(
@@ -82,7 +102,7 @@ export async function assignBlogTitleBanner(
 
   const image = await generateGrokImage(
     config,
-    bannerPrompt(topic.topic, config.niche, config.businessName),
+    bannerPrompt(topic.keyword || topic.topic, config.niche, config.businessName),
     { aspectRatio: "16:9" }
   );
   const media = await uploadWordPressMedia(config, image.buffer, {
@@ -122,7 +142,7 @@ export async function assignBlogTitleBanner(
     return;
   }
   log.warn(
-    `Featured image #${media.id} was uploaded, but Braine's title band was not updated.`,
+    `Featured image #${media.id} was uploaded, but Braine's title band was not updated — the post hero will stay a plain dark block until banner_page_background is set (install the mu-plugin on live).`,
     { phase: "phase4", pageTitle: topic.topic, pageId: postId }
   );
 }

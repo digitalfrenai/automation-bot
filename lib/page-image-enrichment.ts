@@ -68,7 +68,7 @@ function basePhotoRules(
   const brand = brandColors
     ? ` Brand color palette to echo in lighting and wardrobe if natural: ${brandColors}.`
     : "";
-  return `Professional marketing photograph for "${brief.businessName}" (${brief.niche}). Audience: ${brief.targetAudience}. Tone: ${brief.toneOfVoice}. Services: ${brief.coreServices.join(", ") || "general business"}.${styleNote}${brand} Photorealistic, well-lit, no text overlays, no logos, no watermarks.`;
+  return `Professional marketing photograph for ${brief.businessName} (${brief.niche}). Audience: ${brief.targetAudience}. Tone: ${brief.toneOfVoice}. Services: ${brief.coreServices.join(", ") || "general business"}.${styleNote}${brand} Photorealistic, well-lit. Do not include any visible text, signage, screens with readable UI, or logos in the scene.`;
 }
 
 export function countVisibleImages(html: string): number {

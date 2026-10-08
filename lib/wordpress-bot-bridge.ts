@@ -336,14 +336,73 @@ export async function activeThemeIsBraine(
   );
 }
 
+const POST_BANNER_ROUTE = "/wp-json/wordpress-bot/v1/post-banner";
+
+/** True when the mu-plugin exposes Braine blog title banner (not just custom_logo). */
+export async function isPostBannerBridgeAvailable(
+  config: LoadedSiteConfig
+): Promise<boolean> {
+  try {
+    await wpRequest(config, POST_BANNER_ROUTE, {
+      method: "POST",
+      body: JSON.stringify({ post_id: 1, media_id: 0 }),
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof WordPressApiError) {
+      if (err.status === 404) return false;
+      if (err.status === 400 || err.status === 401 || err.status === 403) return true;
+    }
+    return false;
+  }
+}
+
+export async function applyPostTitleBannerViaWpCli(
+  config: LoadedSiteConfig,
+  postId: number,
+  mediaId: number,
+  sourceUrl: string,
+  onLog?: LogSink
+): Promise<boolean> {
+  const log = createPipelineLogger(onLog ?? (() => undefined));
+  const php = `if (function_exists('wordpress_bot_apply_post_title_banner')) { $saved = wordpress_bot_apply_post_title_banner(${postId}, ${mediaId}, "${phpDoubleQuoted(sourceUrl)}"); echo ($saved !== '') ? 'BANNER_OK' : 'BANNER_FAIL'; } else { echo 'BANNER_MISSING'; }`;
+  try {
+    const result = await runRemoteWpCli(config, `eval ${shellSingleQuote(php)}`);
+    if (result.stdout.includes("BANNER_OK")) {
+      log.info(`Braine blog title background set via WP-CLI (post #${postId}).`, {
+        phase: "phase4",
+        pageId: postId,
+      });
+      return true;
+    }
+    log.warn(
+      `WP-CLI could not save Braine title background: ${(result.stderr || result.stdout).trim() || "no output"}`,
+      { phase: "phase4", pageId: postId }
+    );
+    return false;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "WP-CLI banner update failed";
+    log.warn(`WP-CLI Braine title background failed: ${message}`, {
+      phase: "phase4",
+      pageId: postId,
+    });
+    return false;
+  }
+}
+
 /** Copy the latest mu-plugin so new routes (blog title banner) exist on the site. */
 export async function ensureBotBridgeInstalled(
   config: LoadedSiteConfig,
   onLog?: LogSink
 ): Promise<boolean> {
+  if (await isPostBannerBridgeAvailable(config)) {
+    return true;
+  }
   if (hasRemoteShellCredentials(config)) {
     const remote = await deployWordPressBotRestBridge(config, onLog);
-    if (remote) return true;
+    if (remote && (await isPostBannerBridgeAvailable(config))) return true;
   }
-  return deployWordPressBotRestBridgeLocally(config, onLog);
+  const local = await deployWordPressBotRestBridgeLocally(config, onLog);
+  if (local && (await isPostBannerBridgeAvailable(config))) return true;
+  return false;
 }
