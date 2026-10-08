@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WordPress Bot REST Bridge
  * Description: Exposes theme_mod updates (custom logo and Braine Redux logos) for the automation dashboard. Must-use plugin.
- * Version: 1.1.0
+ * Version: 1.2.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -71,6 +71,48 @@ function wordpress_bot_apply_braine_logo( $media_id, $source_url ) {
 	return '';
 }
 
+/**
+ * Braine paints the single-post title band from post meta banner_page_background.
+ *
+ * @param int    $post_id    Post ID.
+ * @param int    $media_id   Attachment ID.
+ * @param string $source_url Absolute image URL.
+ * @return string Saved banner URL.
+ */
+function wordpress_bot_apply_post_title_banner( $post_id, $media_id, $source_url ) {
+	$post = get_post( $post_id );
+	if ( ! $post || 'post' !== $post->post_type || '' === $source_url ) {
+		return '';
+	}
+	$media = array(
+		'url'       => $source_url,
+		'id'        => (string) $media_id,
+		'height'    => '',
+		'width'     => '',
+		'thumbnail' => $source_url,
+	);
+	update_post_meta( $post_id, 'banner_page_background', $media );
+	set_post_thumbnail( $post_id, $media_id );
+	$saved = get_post_meta( $post_id, 'banner_page_background', true );
+	return ( is_array( $saved ) && ! empty( $saved['url'] ) ) ? (string) $saved['url'] : '';
+}
+
+add_action(
+	'wp_head',
+	static function () {
+		if ( ! is_singular( 'post' ) ) {
+			return;
+		}
+		echo '<style id="wp-bot-blog-title-banner">
+body.single-post .page-title{background-color:#140e1c;}
+body.single-post .page-title-shadow{background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;z-index:0;}
+body.single-post .page-title:before{z-index:1;opacity:.45 !important;background:linear-gradient(to top,rgba(12,8,20,.75),rgba(12,8,20,.28)) !important;}
+body.single-post .page-title .auto-container{position:relative;z-index:2;}
+</style>';
+	},
+	20
+);
+
 add_action(
 	'rest_api_init',
 	static function () {
@@ -112,12 +154,71 @@ add_action(
 							'site_logo'      => (int) get_option( 'site_logo' ),
 							'stylesheet'     => get_stylesheet(),
 							'template'       => $theme->get_template(),
-							'bridge_version' => 2,
+							'bridge_version' => 3,
 							'braine_logo'    => $braine_logo,
 						)
 					);
 				},
 				'args'                => array(
+					'media_id'   => array(
+						'required'          => true,
+						'type'              => 'integer',
+						'sanitize_callback' => 'absint',
+					),
+					'source_url' => array(
+						'required' => false,
+						'type'     => 'string',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			'wordpress-bot/v1',
+			'/post-banner',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => static function ( WP_REST_Request $request ) {
+					$post_id = (int) $request->get_param( 'post_id' );
+					return $post_id > 0 && current_user_can( 'edit_post', $post_id );
+				},
+				'callback'            => static function ( WP_REST_Request $request ) {
+					$post_id  = (int) $request->get_param( 'post_id' );
+					$media_id = (int) $request->get_param( 'media_id' );
+					if ( $post_id <= 0 || $media_id <= 0 || ! wp_attachment_is_image( $media_id ) ) {
+						return new WP_Error(
+							'wordpress_bot_invalid_banner',
+							'post_id and media_id must refer to a post and an image.',
+							array( 'status' => 400 )
+						);
+					}
+					$source_url = esc_url_raw( (string) $request->get_param( 'source_url' ) );
+					if ( '' === $source_url ) {
+						$source_url = (string) wp_get_attachment_url( $media_id );
+					}
+					$banner = wordpress_bot_apply_post_title_banner( $post_id, $media_id, $source_url );
+					if ( '' === $banner ) {
+						return new WP_Error(
+							'wordpress_bot_banner_failed',
+							'Could not save the blog title background.',
+							array( 'status' => 500 )
+						);
+					}
+					return rest_ensure_response(
+						array(
+							'post_id'        => $post_id,
+							'media_id'       => $media_id,
+							'banner'         => $banner,
+							'bridge_version' => 3,
+						)
+					);
+				},
+				'args'                => array(
+					'post_id'    => array(
+						'required'          => true,
+						'type'              => 'integer',
+						'sanitize_callback' => 'absint',
+					),
 					'media_id'   => array(
 						'required'          => true,
 						'type'              => 'integer',

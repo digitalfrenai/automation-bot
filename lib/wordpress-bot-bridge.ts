@@ -322,3 +322,28 @@ export async function ensureCustomLogoThemeMod(
   );
   return { ok: false, braine };
 }
+
+export async function activeThemeIsBraine(
+  config: LoadedSiteConfig
+): Promise<boolean> {
+  const activeTheme = await fetchActiveThemeRecord(config);
+  return (
+    themeLooksLikeBraine(
+      activeTheme?.stylesheet,
+      activeTheme?.template,
+      activeTheme?.name
+    ) || configuredZipLooksLikeBraine(config)
+  );
+}
+
+/** Copy the latest mu-plugin so new routes (blog title banner) exist on the site. */
+export async function ensureBotBridgeInstalled(
+  config: LoadedSiteConfig,
+  onLog?: LogSink
+): Promise<boolean> {
+  if (hasRemoteShellCredentials(config)) {
+    const remote = await deployWordPressBotRestBridge(config, onLog);
+    if (remote) return true;
+  }
+  return deployWordPressBotRestBridgeLocally(config, onLog);
+}

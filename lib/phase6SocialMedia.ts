@@ -10,6 +10,9 @@ import {
   publishToSocialPlatform,
   type SocialPlatform,
 } from "@/lib/social-publishers";
+import { prepareWatermarkedBlogImageForSocial } from "@/lib/social-blog-image";
+import { mergeSocialHashtags } from "@/lib/social-hashtags";
+import { fetchPostTagNames } from "@/lib/wordpress-post-media";
 import { normalizeWpUrl } from "@/lib/wordpress-client";
 
 function buildSocialSystemPrompt(): string {
@@ -31,6 +34,8 @@ Rules:
 - facebook: conversational, CTA, 3–5 hashtags.
 - Instagram: engaging caption, emoji sparingly, 5–10 hashtags.
 - Include the source URL naturally when provided.
+- hashtags must be a non-empty array (at least 3 tags). Prefer supplied blog tags when relevant.
+- Do not repeat the caption text inside hashtags.
 - No markdown fences, no prose outside JSON.`;
 }
 
@@ -45,7 +50,12 @@ function buildSocialUserPrompt(input: {
     toneOfVoice: string;
     targetAudience: string;
   };
+  blogTags?: string[];
 }): string {
+  const tagLine =
+    input.blogTags && input.blogTags.length > 0
+      ? `Blog tags (use in hashtags): ${input.blogTags.join(", ")}`
+      : "";
   return `Create social posts for platforms: ${input.platforms.join(", ")}.
 
 Title: ${input.title}
@@ -56,7 +66,8 @@ ${input.excerpt.slice(0, 4000)}
 Business: ${input.brief.businessName}
 Niche: ${input.brief.niche}
 Tone: ${input.brief.toneOfVoice}
-Audience: ${input.brief.targetAudience}`;
+Audience: ${input.brief.targetAudience}
+${tagLine}`;
 }
 
 function parseSocialVariants(
@@ -166,6 +177,35 @@ export async function executePhase6ForSource(
     { phase: "phase6", pageTitle: source.title, pageId: source.wpPostId }
   );
 
+  let blogTags: string[] = [];
+  if (source.wpPostId) {
+    try {
+      blogTags = await fetchPostTagNames(config, source.wpPostId);
+    } catch (err) {
+      log.warn(
+        `Could not read blog tags for social hashtags: ${err instanceof Error ? err.message : "lookup failed"}`,
+        { phase: "phase6", pageId: source.wpPostId }
+      );
+    }
+  }
+
+  let mediaUrl: string | null = null;
+  if (source.wpPostId) {
+    try {
+      mediaUrl = await prepareWatermarkedBlogImageForSocial(
+        config,
+        source.wpPostId,
+        source.title,
+        onLog
+      );
+    } catch (err) {
+      log.warn(
+        `Social share image skipped: ${err instanceof Error ? err.message : "prepare failed"}`,
+        { phase: "phase6", pageId: source.wpPostId }
+      );
+    }
+  }
+
   const completion = await createGrokChatCompletion(
     client,
     {
@@ -187,6 +227,7 @@ export async function executePhase6ForSource(
               toneOfVoice: config.toneOfVoice,
               targetAudience: config.targetAudience,
             },
+            blogTags,
           }),
         },
       ],
@@ -210,6 +251,7 @@ export async function executePhase6ForSource(
         : null;
 
   for (const variant of variants) {
+    const hashtags = mergeSocialHashtags(variant.hashtags, blogTags);
     let status = requireApproval ? "draft" : scheduledAt ? "scheduled" : "draft";
     let externalPostId: string | null = null;
     let errorMessage: string | null = null;
@@ -221,7 +263,8 @@ export async function executePhase6ForSource(
         config,
         variant.platform,
         variant.caption,
-        variant.hashtags
+        hashtags,
+        { imageUrl: mediaUrl ?? undefined, linkUrl: source.url }
       );
       if (published.ok) {
         status = "published";
@@ -274,7 +317,8 @@ export async function executePhase6ForSource(
         sourceTitle: source.title,
         sourceUrl: source.url ?? null,
         caption: variant.caption,
-        hashtags: variant.hashtags,
+        hashtags,
+        mediaUrl: mediaUrl ?? null,
         promotionalSnippet: variant.promotionalSnippet || null,
         status,
         requireApproval,
@@ -352,7 +396,11 @@ export async function publishDueSocialPosts(
       config,
       post.platform as SocialPlatform,
       post.caption,
-      hashtags
+      hashtags,
+      {
+        imageUrl: post.mediaUrl ?? undefined,
+        linkUrl: post.sourceUrl ?? undefined,
+      }
     );
 
     if (result.ok) {

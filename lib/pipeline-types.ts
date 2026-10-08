@@ -60,6 +60,8 @@ export type BlogTopic = {
   topic: string;
   keyword: string;
   angle: string;
+  category: string;
+  tags: string[];
 };
 
 export type Phase4PostResult = {

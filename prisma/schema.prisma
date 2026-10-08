@@ -151,6 +151,8 @@ model SocialPostRecord {
   sourceUrl       String?
   caption         String
   hashtags        Json     @default("[]")
+  /// Public URL of watermarked blog featured image for this share
+  mediaUrl        String?
   promotionalSnippet String?
   /// draft | scheduled | published | failed | cancelled
   status          String   @default("draft")

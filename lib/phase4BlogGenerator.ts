@@ -18,6 +18,13 @@ import { prisma } from "@/lib/prisma";
 import { runSeoAudit } from "@/lib/seo-audit";
 import { titleToSlug } from "@/lib/wordpress-client";
 import {
+  assignPostCategory,
+  assignPostTags,
+  listPostCategories,
+  listPostTags,
+} from "@/lib/blog-category";
+import { assignBlogTitleBanner } from "@/lib/blog-title-banner";
+import {
   createWordPressPost,
   replaceWordPressPostContent,
 } from "@/lib/wordpress-post-content";
@@ -28,13 +35,16 @@ function buildTopicSystemPrompt(): string {
 Return ONLY a JSON object:
 {
   "topics": [
-    { "topic": "compelling blog topic title", "keyword": "primary keyword phrase", "angle": "1-sentence angle" }
+    { "topic": "compelling blog topic title", "keyword": "primary keyword phrase", "angle": "1-sentence angle", "category": "Short Category Name", "tags": ["specific tag", "another tag", "third tag"] }
   ]
 }
 Rules:
 - Topics must be specific to the business niche and services.
 - Prefer searchable, intent-driven topics (how-to, comparison, guide, FAQ-style).
 - Keywords should be natural search phrases, not single generic words.
+- category is the WordPress category for that post: 2–4 words, title case, reusable across similar posts.
+- Reuse a category from the supplied existing list when it fits. Do not use Uncategorized.
+- tags is 3 to 5 short WordPress tags for that post (1–3 words each). Reuse supplied existing tags when they fit. Tags are more specific than the category and must not all be copies of the category name.
 - No markdown, no prose outside JSON.`;
 }
 
@@ -46,14 +56,24 @@ function buildTopicUserPrompt(
     targetAudience: string;
     coreServices: string[];
     targetKeywords: string[];
-  }
+  },
+  existingCategories: string[],
+  existingTags: string[]
 ): string {
+  const categoryLine = existingCategories.length
+    ? `Existing categories (reuse when the topic fits): ${existingCategories.join(", ")}`
+    : "No categories exist yet. Create a short reusable category for each topic.";
+  const tagLine = existingTags.length
+    ? `Existing tags (reuse when they fit): ${existingTags.slice(0, 40).join(", ")}`
+    : "No tags exist yet. Create 3–5 specific tags for each topic.";
   return `Generate ${count} unique blog topics for ${brief.businessName}.
 
 Niche: ${brief.niche}
 Audience: ${brief.targetAudience}
 Services: ${brief.coreServices.join(", ") || "N/A"}
-Seed keywords: ${brief.targetKeywords.join(", ") || "N/A"}`;
+Seed keywords: ${brief.targetKeywords.join(", ") || "N/A"}
+${categoryLine}
+${tagLine}`;
 }
 
 function buildBlogUserPrompt(
@@ -99,17 +119,36 @@ function parseTopics(text: string, limit: number): BlogTopic[] {
         t.keyword.trim()
     )
     .slice(0, limit)
-    .map((t) => ({
-      topic: t.topic.trim(),
-      keyword: t.keyword.trim(),
-      angle: typeof t.angle === "string" ? t.angle.trim() : "",
-    }));
+    .map((t) => {
+      const keyword = t.keyword.trim();
+      const topic = t.topic.trim();
+      const fromModel = typeof t.category === "string" ? t.category.trim() : "";
+      const category =
+        fromModel && fromModel.toLowerCase() !== "uncategorized"
+          ? fromModel
+          : keyword.split(/\s+/).slice(0, 3).join(" ") ||
+            topic.split(/\s+/).slice(0, 3).join(" ");
+      const rawTags = Array.isArray(t.tags) ? t.tags : [];
+      const tags = rawTags
+        .filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0)
+        .map((tag) => tag.trim())
+        .slice(0, 5);
+      return {
+        topic,
+        keyword,
+        angle: typeof t.angle === "string" ? t.angle.trim() : "",
+        category,
+        tags: tags.length > 0 ? tags : [keyword, category].filter(Boolean).slice(0, 3),
+      };
+    });
 }
 
 export async function generateBlogTopics(
   configId: string,
   count: number,
-  onLog?: LogSink
+  onLog?: LogSink,
+  existingCategories: string[] = [],
+  existingTags: string[] = []
 ): Promise<BlogTopic[]> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const config = await loadSiteConfig(configId);
@@ -128,13 +167,18 @@ export async function generateBlogTopics(
         { role: "system", content: buildTopicSystemPrompt() },
         {
           role: "user",
-          content: buildTopicUserPrompt(n, {
-            businessName: config.businessName,
-            niche: config.niche,
-            targetAudience: config.targetAudience,
-            coreServices: config.coreServicesList,
-            targetKeywords: config.targetKeywordsList,
-          }),
+          content: buildTopicUserPrompt(
+            n,
+            {
+              businessName: config.businessName,
+              niche: config.niche,
+              targetAudience: config.targetAudience,
+              coreServices: config.coreServicesList,
+              targetKeywords: config.targetKeywordsList,
+            },
+            existingCategories,
+            existingTags
+          ),
         },
       ],
     },
@@ -148,10 +192,13 @@ export async function generateBlogTopics(
 
   const topics = parseTopics(content, n);
   for (const topic of topics) {
-    log.info(`Topic: "${topic.topic}" (keyword: ${topic.keyword})`, {
-      phase: "phase4",
-      pageTitle: topic.topic,
-    });
+    log.info(
+      `Topic: "${topic.topic}" (keyword: ${topic.keyword}, category: ${topic.category}, tags: ${topic.tags.join(", ")})`,
+      {
+        phase: "phase4",
+        pageTitle: topic.topic,
+      }
+    );
   }
   return topics;
 }
@@ -226,6 +273,9 @@ export async function generateAndPublishBlogPost(
     content: "",
   });
 
+  await assignPostCategory(config, draftPost.id, topic.category, onLog);
+  await assignPostTags(config, draftPost.id, topic.tags, onLog);
+
   let html = await savePreparedPostContent(config, draftPost.id, prepared);
 
   const seo = await runSeoAudit({
@@ -267,6 +317,15 @@ export async function generateAndPublishBlogPost(
   if (requireApproval) {
     log.info(
       `Saved as WordPress draft for human approval (post ${draftPost.id}).`,
+      { phase: "phase4", pageTitle: topic.topic, pageId: draftPost.id }
+    );
+  }
+
+  try {
+    await assignBlogTitleBanner(config, draftPost.id, topic, onLog);
+  } catch (err) {
+    log.warn(
+      `Blog title background skipped: ${err instanceof Error ? err.message : "image generation failed"}`,
       { phase: "phase4", pageTitle: topic.topic, pageId: draftPost.id }
     );
   }
@@ -345,7 +404,32 @@ export async function executePhase4(
     { phase: "phase4" }
   );
 
-  const topics = await generateBlogTopics(configId, count, onLog);
+  let categoryNames: string[] = [];
+  let tagNames: string[] = [];
+  try {
+    categoryNames = (await listPostCategories(config)).map((category) => category.name);
+  } catch (err) {
+    log.warn(
+      `Could not read existing categories: ${err instanceof Error ? err.message : "lookup failed"}`,
+      { phase: "phase4" }
+    );
+  }
+  try {
+    tagNames = (await listPostTags(config)).map((tag) => tag.name);
+  } catch (err) {
+    log.warn(
+      `Could not read existing tags: ${err instanceof Error ? err.message : "lookup failed"}`,
+      { phase: "phase4" }
+    );
+  }
+
+  const topics = await generateBlogTopics(
+    configId,
+    count,
+    onLog,
+    categoryNames,
+    tagNames
+  );
   const results: Phase4PostResult[] = [];
 
   for (const topic of topics) {

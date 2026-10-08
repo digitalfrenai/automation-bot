@@ -194,7 +194,11 @@ export async function approveSocialPost(
       config,
       record.platform as SocialPlatform,
       record.caption,
-      hashtags
+      hashtags,
+      {
+        imageUrl: record.mediaUrl ?? undefined,
+        linkUrl: record.sourceUrl ?? undefined,
+      }
     );
 
     if (result.ok) {
