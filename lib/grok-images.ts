@@ -25,6 +25,32 @@ export function imagePromptVisualSubject(hint: string, maxWords = 10): string {
   return words.join(" ") || "professional business environment";
 }
 
+/** Object-only scene wording — never paste marketing titles (e.g. "3D Scanning Services") into Imagine prompts. */
+export function imagePromptPhysicalScene(input: {
+  niche?: string;
+  coreServices?: string[];
+  slotHint?: string;
+}): string {
+  const haystack = `${input.niche ?? ""} ${input.coreServices?.join(" ") ?? ""} ${input.slotHint ?? ""}`.toLowerCase();
+  const props: string[] = [];
+  if (/print|filament|fdm|resin|maker|additive/.test(haystack)) {
+    props.push("FDM 3D printers on desks", "filament spools on shelves");
+  }
+  if (/miniature|scale model|figurine|diorama|ship|architectural model|toy/.test(haystack)) {
+    props.push("small scale models on a cutting mat", "hand tools beside models");
+  }
+  if (/scan|laser|metrology|point cloud|lidar/.test(haystack)) {
+    props.push("structured-light scanner on a tripod", "blue scanning light on an object in a dark studio");
+  }
+  if (/workshop|studio|lab|factory|bench/.test(haystack)) {
+    props.push("industrial workbench", "organized tool wall");
+  }
+  if (props.length === 0) {
+    props.push("modern workspace", "professional equipment on a table");
+  }
+  return `Photograph showing only physical objects: ${[...new Set(props)].slice(0, 5).join("; ")}.`;
+}
+
 export function withImageNoTextRules(prompt: string): string {
   const trimmed = prompt.trim();
   if (!trimmed) return IMAGE_NO_TEXT_PREFIX.trim() + IMAGE_NO_TEXT_SUFFIX.trim();
@@ -55,7 +81,7 @@ export function pageImagesMaxPerPage(): number {
   return Math.min(24, Math.floor(n));
 }
 
-async function requestGrokImage(
+export async function requestGrokImage(
   client: OpenAI,
   prompt: string,
   aspectRatio?: string
@@ -99,8 +125,14 @@ export async function generateGrokImage(
   options?: {
     aspectRatio?: string;
     client?: OpenAI;
+    onLog?: import("@/lib/pipeline-logger").LogSink;
+    logMeta?: {
+      phase?: import("@/lib/pipeline-types").PipelinePhase;
+      pageTitle?: string;
+      slotId?: string;
+    };
   }
 ): Promise<GeneratedImage> {
-  const client = options?.client ?? createGrokClient(config);
-  return requestGrokImage(client, prompt, options?.aspectRatio);
+  const { generateGrokImageWithTextGuard } = await import("@/lib/grok-image-text-guard");
+  return generateGrokImageWithTextGuard(config, prompt, options);
 }

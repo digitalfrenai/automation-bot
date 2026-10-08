@@ -1,5 +1,5 @@
 import type { LoadedSiteConfig } from "@/lib/config-loader";
-import { generateGrokImage } from "@/lib/grok-images";
+import { generateGrokImage, imagePromptPhysicalScene } from "@/lib/grok-images";
 import type { LogSink } from "@/lib/pipeline-logger";
 import { createPipelineLogger } from "@/lib/pipeline-logger";
 import { titleToSlug } from "@/lib/wordpress-client";
@@ -14,14 +14,13 @@ import { wpRequest } from "@/lib/wordpress-client";
 
 const BANNER_ROUTE = "/wp-json/wordpress-bot/v1/post-banner";
 
-/** Visual-only scene — never repeat the post title (Imagine tends to paint it as misspelled text). */
-function bannerPrompt(keyword: string, niche: string, businessName: string): string {
+/** Visual-only objects — keywords like "3D scanning" become painted headline text in images. */
+function bannerPrompt(keyword: string, niche: string): string {
   return [
     "Wide cinematic photograph for a blog header background.",
-    `Depict only objects and environment related to: ${keyword}.`,
-    `Industry: ${niche}. Brand context: ${businessName}.`,
-    "Workshop or studio scene, photorealistic, slightly dark for a white HTML headline overlay, 16:9.",
-    "No computer monitors with readable text, no brochures, no banners, no painted slogans.",
+    imagePromptPhysicalScene({ niche, slotHint: keyword }),
+    "Workshop or studio, photorealistic, slightly dark for a white HTML headline overlay, 16:9.",
+    "No monitors facing camera, no brochures, no painted slogans.",
   ].join(" ");
 }
 
@@ -102,8 +101,12 @@ export async function assignBlogTitleBanner(
 
   const image = await generateGrokImage(
     config,
-    bannerPrompt(topic.keyword || topic.topic, config.niche, config.businessName),
-    { aspectRatio: "16:9" }
+    bannerPrompt(topic.keyword || topic.topic, config.niche),
+    {
+      aspectRatio: "16:9",
+      onLog,
+      logMeta: { phase: "phase4", pageTitle: topic.topic, slotId: "title-banner" },
+    }
   );
   const media = await uploadWordPressMedia(config, image.buffer, {
     filenameBase: `${titleToSlug(topic.topic) || "blog"}-banner`,

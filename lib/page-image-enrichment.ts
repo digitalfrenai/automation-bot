@@ -14,7 +14,7 @@ import {
 } from "@/lib/gutenberg-content";
 import {
   generateGrokImage,
-  imagePromptVisualSubject,
+  imagePromptPhysicalScene,
   pageImagesEnabled,
   pageImagesMaxPerPage,
   pageImagesUseAi,
@@ -69,7 +69,11 @@ function basePhotoRules(
   const brand = brandColors
     ? ` Brand color palette to echo in lighting and wardrobe if natural: ${brandColors}.`
     : "";
-  return `Professional marketing photograph for ${brief.businessName} (${brief.niche}). Audience: ${brief.targetAudience}. Tone: ${brief.toneOfVoice}. Services: ${brief.coreServices.join(", ") || "general business"}.${styleNote}${brand} Photorealistic, well-lit. Do not include any visible text, signage, screens with readable UI, or logos in the scene.`;
+  const scene = imagePromptPhysicalScene({
+    niche: brief.niche,
+    coreServices: brief.coreServices,
+  });
+  return `${scene} Mood: ${brief.toneOfVoice}. Audience: ${brief.targetAudience}.${styleNote}${brand} Photorealistic, well-lit. No visible text, signage, readable screens, or logos.`;
 }
 
 export function countVisibleImages(html: string): number {
@@ -145,7 +149,7 @@ function planPageImageSlotsFromHtml(
       role: index === 0 ? "hero" : "section",
       aspectRatio: aspectRatioFromPlaceholdSrc(src, index),
       alt,
-      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Scene related to ${imagePromptVisualSubject(pageTitle)} — layout image ${index + 1}. Match reference composition for this slot if provided.`,
+      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Alternate angle for layout slot ${index + 1}. Match reference composition if provided.`,
     });
   }
   return slots;
@@ -246,7 +250,7 @@ export function planPageImageSlots(
       role: "hero",
       aspectRatio: "16:9",
       alt: `${pageTitle} — ${brief.businessName}`,
-      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Page hero image matching theme demo style; subject: ${imagePromptVisualSubject(pageTitle)}.`,
+      prompt: `${basePhotoRules(brief, matchDesignReference, brandColors)} Page hero image matching theme demo style.`,
     },
   ];
 }
@@ -655,7 +659,8 @@ async function fillRemainingSlotsWithAi(
   slots: PageImageSlot[],
   already: UploadedPageImage[],
   client: OpenAI,
-  onLog?: LogSink
+  onLog?: LogSink,
+  logPhase: "phase2" | "phase4" = "phase2"
 ): Promise<UploadedPageImage[]> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const filledIds = new Set(already.map((u) => u.id));
@@ -666,10 +671,12 @@ async function fillRemainingSlotsWithAi(
 
   for (const slot of remaining) {
     try {
-      log.info(`AI fallback image (${slot.id})…`, { phase: "phase2", pageTitle });
+      log.info(`AI fallback image (${slot.id})…`, { phase: logPhase, pageTitle });
       const generated = await generateGrokImage(config, slot.prompt, {
         aspectRatio: slot.aspectRatio,
         client,
+        onLog,
+        logMeta: { phase: logPhase, pageTitle, slotId: slot.id },
       });
       const media = await uploadWordPressMedia(config, generated.buffer, {
         filenameBase: `${slugBase}-${slot.id}`,
@@ -761,7 +768,8 @@ export async function enrichPreparedContentWithPageImages(
       slotsToFill,
       uploaded,
       client,
-      onLog
+      onLog,
+      logPhase
     );
   } else if (uploaded.length < slotsToFill.length) {
     log.warn(
