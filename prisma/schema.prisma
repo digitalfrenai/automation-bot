@@ -55,6 +55,8 @@ model SiteConfig {
   blogRequireApproval      Boolean @default(true)
   /// Include curated external reference links in blog content
   blogIncludeExternalLinks Boolean @default(true)
+  /// When non-empty, all posts in a Phase 4 run use this WordPress category
+  blogCategory             String  @default("")
 
   /// Phase 5 — content older than this many days is a refresh candidate
   updateMaxAgeDays         Int     @default(90)

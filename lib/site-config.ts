@@ -35,6 +35,7 @@ export type SiteConfigInput = {
   blogPostsPerRun?: number;
   blogRequireApproval?: boolean;
   blogIncludeExternalLinks?: boolean;
+  blogCategory?: string;
   updateMaxAgeDays?: number;
   updateRequireApproval?: boolean;
   updateRefreshPages?: boolean;
@@ -104,6 +105,7 @@ export function siteConfigToClient(config: {
   blogPostsPerRun: number;
   blogRequireApproval: boolean;
   blogIncludeExternalLinks: boolean;
+  blogCategory: string;
   updateMaxAgeDays: number;
   updateRequireApproval: boolean;
   updateRefreshPages: boolean;
@@ -144,6 +146,8 @@ export function normalizeMaintenanceSettings(body: SiteConfigInput) {
     blogPostsPerRun: clampInt(body.blogPostsPerRun, 3, 1, 10),
     blogRequireApproval: body.blogRequireApproval !== false,
     blogIncludeExternalLinks: body.blogIncludeExternalLinks !== false,
+    blogCategory:
+      typeof body.blogCategory === "string" ? body.blogCategory.trim() : "",
     updateMaxAgeDays: clampInt(body.updateMaxAgeDays, 90, 7, 730),
     updateRequireApproval: body.updateRequireApproval !== false,
     updateRefreshPages: body.updateRefreshPages !== false,

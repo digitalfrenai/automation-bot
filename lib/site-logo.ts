@@ -327,5 +327,61 @@ export function applyBusinessLogoToPreparedContent(
 
 export function logoPromptLine(logo: ResolvedSiteLogo | null): string {
   if (!logo) return "";
-  return `Business logo (use this exact URL for any logo/branding image in page sections — not in theme header): ${logo.sourceUrl}`;
+  return `The WordPress theme header already shows the business logo. Do NOT add logo images, branding marks, or img tags pointing to ${logo.sourceUrl} anywhere in the page body.`;
+}
+
+function imgTagLooksLikeLogo(attrs: string, src: string, logo?: ResolvedSiteLogo): boolean {
+  if (LOGO_IMG_HINT.test(attrs) || THEME_DEMO_LOGO_PATH.test(src)) return true;
+  if (/\blogo\b/i.test(src) && /\/wp-content\//i.test(src)) return true;
+  if (logo?.sourceUrl?.trim()) {
+    const normalized = logo.sourceUrl.split("?")[0]?.trim();
+    if (normalized && src.split("?")[0]?.trim() === normalized) return true;
+    if (logo.mediaId > 0 && new RegExp(`wp-image-${logo.mediaId}\\b`).test(attrs)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Remove duplicate logos from editor content — Braine/header already renders the mark. */
+export function stripLogosFromPageContentHtml(
+  html: string,
+  logo?: ResolvedSiteLogo
+): string {
+  if (!html.trim()) return html;
+
+  let out = html.replace(/<figure\b[^>]*>([\s\S]*?)<\/figure>/gi, (full, inner: string) => {
+    const imgMatch = inner.match(/<img\b([^>]*?)>/i);
+    if (!imgMatch) return full;
+    const attrs = imgMatch[1] ?? "";
+    const srcMatch = attrs.match(/\bsrc=(["'])(.*?)\1/i);
+    const src = srcMatch?.[2] ?? "";
+    if (imgTagLooksLikeLogo(attrs, src, logo)) return "";
+    return full;
+  });
+
+  out = out.replace(/<img\b([^>]*?)>/gi, (full, attrs: string) => {
+    const srcMatch = attrs.match(/\bsrc=(["'])(.*?)\1/i);
+    const src = srcMatch?.[2] ?? "";
+    if (imgTagLooksLikeLogo(attrs, src, logo)) return "";
+    return full;
+  });
+
+  return out.replace(/\n{3,}/g, "\n\n");
+}
+
+export function stripLogosFromPreparedContent(
+  prepared: PreparedContent,
+  logo?: ResolvedSiteLogo
+): PreparedContent {
+  const html = stripLogosFromPageContentHtml(prepared.storage.html, logo);
+  const auditHtml = stripLogosFromPageContentHtml(prepared.auditHtml, logo);
+  if (html === prepared.storage.html && auditHtml === prepared.auditHtml) {
+    return prepared;
+  }
+  return {
+    format: prepared.format,
+    storage: { ...prepared.storage, html },
+    auditHtml,
+  };
 }

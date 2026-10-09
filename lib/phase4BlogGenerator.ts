@@ -23,7 +23,7 @@ import {
   listPostCategories,
   listPostTags,
 } from "@/lib/blog-category";
-import { assignBlogTitleBanner } from "@/lib/blog-title-banner";
+import { assignBlogTitleBanner } from "@/lib/braine-title-banner";
 import { enrichPreparedContentWithPageImages } from "@/lib/page-image-enrichment";
 import {
   createWordPressPost,
@@ -143,6 +143,17 @@ function parseTopics(text: string, limit: number): BlogTopic[] {
         tags: tags.length > 0 ? tags : [keyword, category].filter(Boolean).slice(0, 3),
       };
     });
+}
+
+function applyBlogCategoryOverride(
+  topics: BlogTopic[],
+  categoryOverride?: string
+): BlogTopic[] {
+  const category = categoryOverride?.trim();
+  if (!category || category.toLowerCase() === "uncategorized") {
+    return topics;
+  }
+  return topics.map((topic) => ({ ...topic, category }));
 }
 
 export async function generateBlogTopics(
@@ -411,7 +422,7 @@ export async function generateAndPublishBlogPost(
 export async function executePhase4(
   configId: string,
   onLog?: LogSink,
-  options?: { topicCount?: number }
+  options?: { topicCount?: number; blogCategory?: string }
 ): Promise<Phase4PostResult[]> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const config = await loadSiteConfig(configId);
@@ -441,13 +452,22 @@ export async function executePhase4(
     );
   }
 
-  const topics = await generateBlogTopics(
+  const categoryOverride =
+    options?.blogCategory?.trim() || config.blogCategory?.trim() || undefined;
+
+  let topics = await generateBlogTopics(
     configId,
     count,
     onLog,
     categoryNames,
     tagNames
   );
+  if (categoryOverride) {
+    topics = applyBlogCategoryOverride(topics, categoryOverride);
+    log.info(`Using dashboard blog category for all posts: "${categoryOverride}".`, {
+      phase: "phase4",
+    });
+  }
   const results: Phase4PostResult[] = [];
 
   for (const topic of topics) {

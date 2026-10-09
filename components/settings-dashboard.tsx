@@ -71,6 +71,7 @@ type FormState = {
   blogPostsPerRun: number;
   blogRequireApproval: boolean;
   blogIncludeExternalLinks: boolean;
+  blogCategory: string;
   updateMaxAgeDays: number;
   updateRequireApproval: boolean;
   updateRefreshPages: boolean;
@@ -142,6 +143,7 @@ const initialForm: FormState = {
   blogPostsPerRun: 3,
   blogRequireApproval: true,
   blogIncludeExternalLinks: true,
+  blogCategory: "",
   updateMaxAgeDays: 90,
   updateRequireApproval: true,
   updateRefreshPages: true,
@@ -336,6 +338,10 @@ export function SettingsDashboard() {
             blogRequireApproval: data.config.blogRequireApproval !== false,
             blogIncludeExternalLinks:
               data.config.blogIncludeExternalLinks !== false,
+            blogCategory:
+              typeof data.config.blogCategory === "string"
+                ? data.config.blogCategory
+                : "",
             updateMaxAgeDays: data.config.updateMaxAgeDays ?? 90,
             updateRequireApproval: data.config.updateRequireApproval !== false,
             updateRefreshPages: data.config.updateRefreshPages !== false,
@@ -790,6 +796,7 @@ export function SettingsDashboard() {
       {
         configId: SINGLE_CONFIG_ID,
         topicCount: form.blogPostsPerRun,
+        blogCategory: form.blogCategory.trim() || undefined,
       },
       "Phase 4 blog generation completed."
     );
@@ -1341,6 +1348,19 @@ export function SettingsDashboard() {
                   patch({ blogPostsPerRun: Number(e.target.value) || 1 })
                 }
               />
+            </Field>
+            <Field label="Blog category (optional)">
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="Leave empty — Grok picks a category per post"
+                value={form.blogCategory}
+                onChange={(e) => patch({ blogCategory: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-muted">
+                When set, every post in the run is assigned this WordPress
+                category. Save settings to keep it for later runs.
+              </p>
             </Field>
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-white px-4 py-3">
               <input

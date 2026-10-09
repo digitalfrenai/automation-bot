@@ -11,17 +11,22 @@ export const maxDuration = 900;
 export async function POST(request: NextRequest) {
   let configId = SINGLE_CONFIG_ID;
   let topicCount: number | undefined;
+  let blogCategory: string | undefined;
 
   try {
     const body = (await request.json()) as {
       configId?: string;
       topicCount?: number;
+      blogCategory?: string;
     };
     if (body.configId?.trim()) {
       configId = body.configId.trim();
     }
     if (typeof body.topicCount === "number" && body.topicCount > 0) {
       topicCount = Math.min(10, Math.floor(body.topicCount));
+    }
+    if (typeof body.blogCategory === "string" && body.blogCategory.trim()) {
+      blogCategory = body.blogCategory.trim();
     }
   } catch {
     /* use defaults */
@@ -39,7 +44,7 @@ export async function POST(request: NextRequest) {
         message: "Phase 4 blog pipeline started — status BLOGGING.",
       });
 
-      await executePhase4(configId, onLog, { topicCount });
+      await executePhase4(configId, onLog, { topicCount, blogCategory });
 
       await updateSiteStatus(configId, "COMPLETED");
       onLog({

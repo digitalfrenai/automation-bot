@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WordPress Bot REST Bridge
  * Description: Exposes theme_mod updates (custom logo and Braine Redux logos) for the automation dashboard. Must-use plugin.
- * Version: 1.2.0
+ * Version: 1.4.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -72,7 +72,7 @@ function wordpress_bot_apply_braine_logo( $media_id, $source_url ) {
 }
 
 /**
- * Braine paints the single-post title band from post meta banner_page_background.
+ * Braine paints the single post/page title band from post meta banner_page_background.
  *
  * @param int    $post_id    Post ID.
  * @param int    $media_id   Attachment ID.
@@ -81,7 +81,7 @@ function wordpress_bot_apply_braine_logo( $media_id, $source_url ) {
  */
 function wordpress_bot_apply_post_title_banner( $post_id, $media_id, $source_url ) {
 	$post = get_post( $post_id );
-	if ( ! $post || 'post' !== $post->post_type || '' === $source_url ) {
+	if ( ! $post || ! in_array( $post->post_type, array( 'post', 'page' ), true ) || '' === $source_url ) {
 		return '';
 	}
 	$media = array(
@@ -100,17 +100,43 @@ function wordpress_bot_apply_post_title_banner( $post_id, $media_id, $source_url
 add_action(
 	'wp_head',
 	static function () {
-		if ( ! is_singular( 'post' ) ) {
+		if ( ! is_singular( array( 'post', 'page' ) ) ) {
 			return;
 		}
-		echo '<style id="wp-bot-blog-title-banner">
-body.single-post .page-title{background-color:#140e1c;}
-body.single-post .page-title-shadow{background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;z-index:0;}
-body.single-post .page-title:before{z-index:1;opacity:.45 !important;background:linear-gradient(to top,rgba(12,8,20,.75),rgba(12,8,20,.28)) !important;}
-body.single-post .page-title .auto-container{position:relative;z-index:2;}
+		echo '<style id="wp-bot-braine-title-banner">
+body.single-post .page-title,body.page .page-title,body.home .page-title{background-color:#140e1c;}
+body.single-post .page-title-shadow,body.page .page-title-shadow,body.home .page-title-shadow{background-size:cover !important;background-position:center center !important;background-repeat:no-repeat !important;z-index:0;}
+body.single-post .page-title:before,body.page .page-title:before,body.home .page-title:before{z-index:1;opacity:.45 !important;background:linear-gradient(to top,rgba(12,8,20,.75),rgba(12,8,20,.28)) !important;}
+body.single-post .page-title .auto-container,body.page .page-title .auto-container,body.home .page-title .auto-container{position:relative;z-index:2;}
 </style>';
 	},
 	20
+);
+
+/** Braine reads banner_page_background meta; some page templates never bind it — force the URL in CSS. */
+add_action(
+	'wp_head',
+	static function () {
+		if ( ! is_singular( array( 'post', 'page' ) ) ) {
+			return;
+		}
+		$post_id = (int) get_queried_object_id();
+		if ( $post_id <= 0 ) {
+			return;
+		}
+		$banner = get_post_meta( $post_id, 'banner_page_background', true );
+		if ( ! is_array( $banner ) || empty( $banner['url'] ) ) {
+			return;
+		}
+		$url = esc_url( (string) $banner['url'] );
+		if ( '' === $url ) {
+			return;
+		}
+		echo '<style id="wp-bot-braine-title-banner-bg">
+body.single-post .page-title-shadow,body.page .page-title-shadow,body.home .page-title-shadow,.page-title .page-title-shadow{background-image:url("' . $url . '") !important;}
+</style>';
+	},
+	21
 );
 
 add_action(
@@ -154,7 +180,7 @@ add_action(
 							'site_logo'      => (int) get_option( 'site_logo' ),
 							'stylesheet'     => get_stylesheet(),
 							'template'       => $theme->get_template(),
-							'bridge_version' => 3,
+							'bridge_version' => 4,
 							'braine_logo'    => $braine_logo,
 						)
 					);
@@ -188,7 +214,7 @@ add_action(
 					if ( $post_id <= 0 || $media_id <= 0 || ! wp_attachment_is_image( $media_id ) ) {
 						return new WP_Error(
 							'wordpress_bot_invalid_banner',
-							'post_id and media_id must refer to a post and an image.',
+							'post_id and media_id must refer to a post or page and an image.',
 							array( 'status' => 400 )
 						);
 					}
@@ -200,7 +226,7 @@ add_action(
 					if ( '' === $banner ) {
 						return new WP_Error(
 							'wordpress_bot_banner_failed',
-							'Could not save the blog title background.',
+							'Could not save the title background.',
 							array( 'status' => 500 )
 						);
 					}
@@ -209,7 +235,7 @@ add_action(
 							'post_id'        => $post_id,
 							'media_id'       => $media_id,
 							'banner'         => $banner,
-							'bridge_version' => 3,
+							'bridge_version' => 4,
 						)
 					);
 				},

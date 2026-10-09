@@ -8,9 +8,11 @@ import {
   prepareContentFromGrok,
   savePreparedPageContent,
 } from "@/lib/content-pipeline";
+import { assignPageTitleBanner } from "@/lib/braine-title-banner";
 import { enrichPreparedContentWithPageImages } from "@/lib/page-image-enrichment";
+import { activeThemeIsBraine } from "@/lib/wordpress-bot-bridge";
 import {
-  applyBusinessLogoToPreparedContent,
+  stripLogosFromPreparedContent,
   ensureSiteLogoOnWordPress,
   logoPromptLine,
 } from "@/lib/site-logo";
@@ -72,7 +74,8 @@ Target keywords (use naturally): ${brief.targetKeywords.join(", ") || "N/A"}
 
 ${structureLine}
 The on-page H1 must be a single compelling headline — not an SEO title with pipe characters (|).
-Make copy specific to the niche and audience.${logoLine ? `\n${logoLine}` : ""}`;
+Make copy specific to the niche and audience.
+Never embed the site logo or branding mark in the page body — the theme header already shows it.${logoLine ? `\n${logoLine}` : ""}`;
 }
 
 function buildHomePageAddon(
@@ -398,17 +401,20 @@ IMPORTANT: Return valid JSON only. Every slot id must appear in replacements.`,
     phase: "phase2",
   });
 
+  const braineTheme = await activeThemeIsBraine(config);
+
   prepared = await enrichPreparedContentWithPageImages(
     config,
     prepared,
     pageTitle,
     brief,
     pageId,
-    onLog
+    onLog,
+    braineTheme ? { skipFeaturedMedia: true, phase: "phase2" } : { phase: "phase2" }
   );
 
   if (siteLogo) {
-    prepared = applyBusinessLogoToPreparedContent(prepared, siteLogo);
+    prepared = stripLogosFromPreparedContent(prepared, siteLogo);
   }
 
   if (
@@ -423,6 +429,17 @@ IMPORTANT: Return valid JSON only. Every slot id must appear in replacements.`,
   }
 
   const html = await savePreparedPageContent(config, pageId, prepared);
+
+  if (braineTheme) {
+    try {
+      await assignPageTitleBanner(config, pageId, pageTitle, onLog);
+    } catch (err) {
+      log.warn(
+        `Page title background skipped: ${err instanceof Error ? err.message : "image generation failed"}`,
+        { phase: "phase2", pageTitle, pageId }
+      );
+    }
+  }
 
   log.info(`Phase 2: content saved to WordPress page ${pageId}.`, {
     phase: "phase2",
