@@ -8,10 +8,10 @@ const path = require("path");
 const schemaPath = path.join(__dirname, "..", "prisma", "schema.prisma");
 const urlFile = path.join(__dirname, "..", ".cpanel-database.env");
 
-const KEEP_VARCHAR = new Set([
-  "id",
-  "siteConfigId",
-  "blogPostId",
+// This host allows index keys up to 1000 bytes. utf8mb4 uses 4 bytes per
+// character, so two Prisma String columns (varchar 191) overflow a composite index.
+const VARCHAR_64 = new Set(["id", "siteConfigId", "blogPostId"]);
+const VARCHAR_32 = new Set([
   "status",
   "contentType",
   "platform",
@@ -102,11 +102,14 @@ function annotateMysqlStrings(schema) {
       const match = line.match(/^(\s+)(\w+)\s+String(\?)?(\s+.*)?$/);
       if (!match) return line;
       const [, indent, name, optional, rest] = match;
-      if (KEEP_VARCHAR.has(name)) return line;
-      if ((rest || "").includes("@id") || (rest || "").includes("@db.")) {
-        return line;
-      }
-      return `${indent}${name} String${optional || ""}${rest || ""} @db.Text`;
+      const tail = rest || "";
+      if (tail.includes("@db.")) return line;
+      const native = VARCHAR_64.has(name)
+        ? " @db.VarChar(64)"
+        : VARCHAR_32.has(name)
+          ? " @db.VarChar(32)"
+          : " @db.Text";
+      return `${indent}${name} String${optional || ""}${tail}${native}`;
     })
     .join("\n");
 }
@@ -115,7 +118,8 @@ function writeSchema(provider) {
   const current = fs.readFileSync(schemaPath, "utf8");
   let next = current
     .replace(/provider\s*=\s*"(sqlite|mysql)"/, `provider = "${provider}"`)
-    .replace(/ @db\.Text/g, "");
+    .replace(/ @db\.Text/g, "")
+    .replace(/ @db\.VarChar\(\d+\)/g, "");
   if (provider === "mysql") next = annotateMysqlStrings(next);
   if (next !== current) fs.writeFileSync(schemaPath, next);
 }
