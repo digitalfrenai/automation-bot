@@ -1,6 +1,24 @@
 #!/bin/sh
 set -e
 
+node scripts/prepare-database.cjs
+
+if [ -f .cpanel-database.env ]; then
+  DATABASE_URL=$(cat .cpanel-database.env | tr -d '\r')
+  export DATABASE_URL
+fi
+
+case "${DATABASE_URL:-}" in
+  mysql://*|mysqls://*)
+    echo "=== wordpress-bot startup (mysql) ==="
+    mkdir -p storage/uploads/themes storage/uploads/logos storage/uploads/design-references
+    export UPLOAD_THEMES_DIR="${UPLOAD_THEMES_DIR:-$PWD/storage/uploads/themes}"
+    export UPLOAD_LOGOS_DIR="${UPLOAD_LOGOS_DIR:-$PWD/storage/uploads/logos}"
+    export UPLOAD_DESIGN_REFERENCES_DIR="${UPLOAD_DESIGN_REFERENCES_DIR:-$PWD/storage/uploads/design-references}"
+    npx prisma generate
+    npx prisma db push
+    ;;
+  *)
 DATA_ROOT="${RAILWAY_VOLUME_MOUNT_PATH:-/data}"
 
 mkdir -p "$DATA_ROOT/prisma" "$DATA_ROOT/uploads/themes" "$DATA_ROOT/uploads/logos" "$DATA_ROOT/uploads/design-references"
@@ -27,6 +45,8 @@ ls -la "$DATA_ROOT/prisma" 2>/dev/null || echo "Cannot list ${DATA_ROOT}/prisma"
 
 npx prisma db push
 touch "${DATA_ROOT}/prisma/.write-test" && rm -f "${DATA_ROOT}/prisma/.write-test"
+    ;;
+esac
 
 # Docker/Railway set HOSTNAME to the container id; Next binds to that unless we override.
 export HOSTNAME=0.0.0.0

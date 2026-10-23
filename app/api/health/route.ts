@@ -9,6 +9,10 @@ export const dynamic = "force-dynamic";
 
 const HEALTH_MARKER = "2026-09-23-railway-v2";
 
+function redactDatabaseUrl(url: string): string {
+  return url.replace(/^(mysqls?:\/\/)([^@/]+)@/i, "$1***@");
+}
+
 function sqlitePathFromUrl(url: string): string | null {
   if (!url.startsWith("file:")) return null;
   const rest = url.slice("file:".length);
@@ -48,7 +52,8 @@ export async function GET() {
     dbError = err instanceof Error ? err.message : "Database query failed";
   }
 
-  const ready = dirWritable && dbQueryOk;
+  const mysql = /^mysqls?:\/\//i.test(databaseUrl);
+  const ready = mysql ? dbQueryOk : dirWritable && dbQueryOk;
 
   // Railway (and similar) treat non-2xx health checks as failure and SIGTERM the container.
   // Always return 200 when this handler runs; use `ready` for DB/volume diagnostics.
@@ -59,7 +64,7 @@ export async function GET() {
       marker: HEALTH_MARKER,
       gitCommit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
       railwayVolumeMount: process.env.RAILWAY_VOLUME_MOUNT_PATH ?? null,
-      databaseUrl,
+      databaseUrl: redactDatabaseUrl(databaseUrl),
       dbFile,
       dirExists,
       dirWritable,

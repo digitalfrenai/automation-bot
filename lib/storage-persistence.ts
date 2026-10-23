@@ -59,6 +59,20 @@ export type StoragePersistenceInfo = {
 };
 
 export function getStoragePersistenceInfo(): StoragePersistenceInfo {
+  const databaseUrl = process.env.DATABASE_URL?.trim() ?? "";
+  if (/^mysqls?:\/\//i.test(databaseUrl)) {
+    return {
+      railway: false,
+      volumeMountPath: null,
+      dataRoot: path.join(process.cwd(), "storage"),
+      databaseFile: "mysql",
+      databaseExists: true,
+      databaseBytes: 0,
+      persistentStorageOk: true,
+      warning: null,
+    };
+  }
+
   const railway = isRailwayRuntime();
   const volumeMountPath =
     process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim() || null;

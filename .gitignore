@@ -32,6 +32,7 @@ yarn-error.log*
 # env files
 .env
 .env*.local
+.cpanel-database.env
 
 # prisma
 /prisma/*.db
