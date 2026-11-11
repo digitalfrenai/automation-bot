@@ -5,8 +5,8 @@ import { prepareDesignReferenceBuffersForVision } from "@/lib/design-reference-v
 import type { ThemeStyleProfile } from "@/lib/theme-style-profile";
 
 export function designReferenceMaxCount(): number {
-  const n = Number(process.env.DESIGN_REFERENCE_MAX ?? "6");
-  if (!Number.isFinite(n)) return 6;
+  const n = Number(process.env.DESIGN_REFERENCE_MAX ?? "12");
+  if (!Number.isFinite(n)) return 12;
   return Math.min(12, Math.max(1, Math.floor(n)));
 }
 

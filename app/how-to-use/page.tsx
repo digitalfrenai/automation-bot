@@ -105,10 +105,11 @@ const SETUP_STEPS: Step[] = [
           <li>
             <strong>Logo</strong> — upload a file or paste a URL. It becomes the
             WordPress site logo, and its colors are sampled for buttons, headings,
-            and section bands.
+            and section bands. Use <strong>Remove logo</strong> under the preview to
+            clear the stored file, URL, and WordPress logo cache (no save needed).
           </li>
           <li>
-            <strong>Reference website screenshots</strong> (up to 6, 8 MB each) —
+            <strong>Reference website screenshots</strong> (up to 12, 8 MB each) —
             Grok vision recreates this layout and style. If no theme zip is
             uploaded, screenshot-led mode turns on automatically and the
             screenshots become the full design spec. Use 2–3 clear full-page

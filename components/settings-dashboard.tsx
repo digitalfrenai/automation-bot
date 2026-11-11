@@ -16,7 +16,7 @@ import {
   Upload,
   Wifi,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ManagementPanel } from "@/components/management-panel";
 import {
   parsePipelineSsePayload,
@@ -275,6 +275,8 @@ export function SettingsDashboard() {
   const [testing, setTesting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [removingLogo, setRemovingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingDesignRef, setUploadingDesignRef] = useState(false);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>(null);
@@ -490,6 +492,26 @@ export function SettingsDashboard() {
       setBanner({ type: "error", message: "Logo upload failed." });
     } finally {
       setUploadingLogo(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    setRemovingLogo(true);
+    setBanner(null);
+    try {
+      const res = await fetch("/api/upload-logo", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({ type: "error", message: data.error ?? "Could not remove logo." });
+        return;
+      }
+      patch({ businessLogoFilePath: "", businessLogoUrl: "" });
+      if (logoInputRef.current) logoInputRef.current.value = "";
+      setBanner({ type: "success", message: "Logo removed." });
+    } catch {
+      setBanner({ type: "error", message: "Could not remove logo." });
+    } finally {
+      setRemovingLogo(false);
     }
   };
 
@@ -1121,10 +1143,11 @@ export function SettingsDashboard() {
                   </span>
                   <span className="mt-1 text-xs text-muted">Max 5MB</span>
                   <input
+                    ref={logoInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
                     className="sr-only"
-                    disabled={uploadingLogo}
+                    disabled={uploadingLogo || removingLogo}
                     onChange={(e) => uploadLogo(e.target.files?.[0] ?? null)}
                   />
                 </label>
@@ -1151,6 +1174,14 @@ export function SettingsDashboard() {
                   alt="Logo preview"
                   className="max-h-16 max-w-[220px] object-contain"
                 />
+                <button
+                  type="button"
+                  className="mt-3 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-60"
+                  disabled={uploadingLogo || removingLogo}
+                  onClick={() => void removeLogo()}
+                >
+                  {removingLogo ? "Removing…" : "Remove logo"}
+                </button>
               </div>
             ) : null}
             <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
@@ -1160,7 +1191,7 @@ export function SettingsDashboard() {
               <p className="mt-1 text-xs text-muted">
                 Required for screenshot-only builds (no theme zip): upload full-page or
                 section captures. Grok vision recreates this layout and styling in Phase 2.
-                Up to 6 images. Copy and branding come from your business brief — not the
+                Up to 12 images. Copy and branding come from your business brief — not the
                 reference site.
               </p>
               {!form.activeThemeZipPath && form.designReferencePaths.length > 0 ? (
@@ -1168,22 +1199,33 @@ export function SettingsDashboard() {
                   Screenshot-led mode active — no theme zip needed. Run Phase 2 after saving.
                 </p>
               ) : null}
-              <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center transition hover:border-primary/50 hover:bg-slate-100">
+              <label
+                className={`mt-4 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center transition ${
+                  form.designReferencePaths.length >= 12
+                    ? "cursor-not-allowed opacity-60"
+                    : "cursor-pointer hover:border-primary/50 hover:bg-slate-100"
+                }`}
+              >
                 <Upload className="mb-2 h-6 w-6 text-muted" />
                 <span className="text-sm font-medium text-slate-700">
                   {uploadingDesignRef
                     ? "Uploading…"
-                    : "Add reference screenshots (PNG, JPG, WebP)"}
+                    : form.designReferencePaths.length >= 12
+                      ? "12 reference screenshots added"
+                      : "Add reference screenshots (PNG, JPG, WebP)"}
                 </span>
                 <span className="mt-1 text-xs text-muted">
-                  Multiple files allowed · 8MB each
+                  {form.designReferencePaths.length} of 12 · multiple files · 8MB
+                  each
                 </span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
                   multiple
                   className="sr-only"
-                  disabled={uploadingDesignRef}
+                  disabled={
+                    uploadingDesignRef || form.designReferencePaths.length >= 12
+                  }
                   onChange={(e) => uploadDesignReferences(e.target.files)}
                 />
               </label>

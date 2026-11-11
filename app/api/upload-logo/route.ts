@@ -1,10 +1,11 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   getLogoUploadDir,
   logoPublicPathForFilename,
+  resolveStoredLogoPath,
 } from "@/lib/logo-upload-storage";
 import { SINGLE_CONFIG_ID } from "@/lib/site-config";
 
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
         where: { id: SINGLE_CONFIG_ID },
         data: {
           businessLogoFilePath: publicPath,
+          businessLogoUrl: null,
           wpLogoMediaId: null,
         } as Record<string, unknown>,
       });
@@ -77,6 +79,40 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Logo upload failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    const existing = await prisma.siteConfig.findUnique({
+      where: { id: SINGLE_CONFIG_ID },
+    });
+
+    const storedPath = existing?.businessLogoFilePath?.trim() ?? "";
+    if (existing) {
+      await prisma.siteConfig.update({
+        where: { id: SINGLE_CONFIG_ID },
+        data: {
+          businessLogoFilePath: null,
+          businessLogoUrl: null,
+          wpLogoMediaId: null,
+        },
+      });
+    }
+
+    if (storedPath.startsWith("/uploads/logos/")) {
+      try {
+        await unlink(resolveStoredLogoPath(storedPath));
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT") throw err;
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not remove logo.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -17,9 +17,16 @@ function visionMaxTotalBytes(): number {
   return Number.isFinite(n) && n > 200_000 ? Math.floor(n) : 2_400_000;
 }
 
+/** Share the vision payload budget so 12 screenshots still fit the request limit. */
+function visionBytesForImage(imageCount: number): number {
+  const share = Math.floor(visionMaxTotalBytes() / Math.max(1, imageCount));
+  return Math.max(80_000, Math.min(visionMaxBytesPerImage(), share));
+}
+
 async function compressOneForVision(
   buffer: Buffer,
-  mimeType: string
+  mimeType: string,
+  maxBytes: number
 ): Promise<{ buffer: Buffer; mimeType: string }> {
   if (mimeType.includes("svg")) {
     throw new Error(
@@ -31,7 +38,7 @@ async function compressOneForVision(
   try {
     sharp = await loadSharp();
   } catch {
-    if (buffer.length <= visionMaxBytesPerImage()) {
+    if (buffer.length <= maxBytes) {
       return { buffer, mimeType };
     }
     throw new Error(
@@ -39,31 +46,29 @@ async function compressOneForVision(
     );
   }
 
-  const maxW = visionMaxWidth();
+  let width = visionMaxWidth();
   let quality = 82;
-  let out = await sharp(buffer, { animated: false })
-    .rotate()
-    .resize(maxW, 12_000, { fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality, mozjpeg: true })
-    .toBuffer();
-
-  const maxPer = visionMaxBytesPerImage();
-  while (out.length > maxPer && quality > 45) {
-    quality -= 12;
-    out = await sharp(out).jpeg({ quality, mozjpeg: true }).toBuffer();
-  }
-
-  if (out.length > maxPer) {
-    out = await sharp(out)
-      .resize(Math.floor(maxW * 0.75), 9_000, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 58, mozjpeg: true })
+  const encode = (w: number, q: number) =>
+    sharp(buffer, { animated: false })
+      .rotate()
+      .resize(w, 12_000, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: q, mozjpeg: true })
       .toBuffer();
+
+  let out = await encode(width, quality);
+
+  while (out.length > maxBytes && quality > 46) {
+    quality -= 12;
+    out = await encode(width, quality);
   }
 
-  if (out.length > maxPer) {
+  while (out.length > maxBytes && width > 720) {
+    width = Math.floor(width * 0.8);
+    quality = 58;
+    out = await encode(width, quality);
+  }
+
+  if (out.length > maxBytes) {
     throw new Error(
       `Reference screenshot still too large after compression (${Math.round(out.length / 1024)}KB). Crop or upload a smaller image.`
     );
@@ -79,9 +84,14 @@ export async function prepareDesignReferenceBuffersForVision(
     [];
   let totalBytes = 0;
   const maxTotal = visionMaxTotalBytes();
+  const perImage = visionBytesForImage(items.length);
 
   for (const item of items) {
-    const compressed = await compressOneForVision(item.buffer, item.mimeType);
+    const compressed = await compressOneForVision(
+      item.buffer,
+      item.mimeType,
+      perImage
+    );
     if (totalBytes + compressed.buffer.length > maxTotal) {
       throw new Error(
         `Total reference screenshot size exceeds Grok vision limit (~${Math.round(maxTotal / 1024 / 1024)}MB). Remove some screenshots or use smaller captures.`
