@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 
+const STORED_PREFIX = "/uploads/design-references/";
+
 export function getDesignReferenceUploadDir(): string {
   const configured = process.env.UPLOAD_DESIGN_REFERENCES_DIR?.trim();
   if (configured) {
@@ -37,4 +39,18 @@ export async function readStoredDesignReferenceFile(publicPath: string): Promise
           ? "image/gif"
           : "image/jpeg";
   return { buffer, mimeType, filename };
+}
+
+export async function deleteStoredDesignReferenceFiles(
+  publicPaths: string[]
+): Promise<void> {
+  for (const publicPath of publicPaths) {
+    if (!publicPath.startsWith(STORED_PREFIX)) continue;
+    try {
+      await fs.unlink(resolveStoredDesignReferencePath(publicPath));
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") throw err;
+    }
+  }
 }

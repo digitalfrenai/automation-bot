@@ -277,7 +277,13 @@ export function SettingsDashboard() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingDesignRef, setUploadingDesignRef] = useState(false);
+  const designRefAddInputRef = useRef<HTMLInputElement>(null);
+  const designRefReplaceInputRef = useRef<HTMLInputElement>(null);
+  const [designRefUploadMode, setDesignRefUploadMode] = useState<
+    "add" | "replace" | null
+  >(null);
+  const [clearingDesignRef, setClearingDesignRef] = useState(false);
+  const designRefBusy = designRefUploadMode !== null || clearingDesignRef;
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>(null);
   const [connectionsVerified, setConnectionsVerified] = useState(false);
@@ -515,13 +521,17 @@ export function SettingsDashboard() {
     }
   };
 
-  const uploadDesignReferences = async (files: FileList | null) => {
+  const uploadDesignReferences = async (
+    files: FileList | null,
+    mode: "add" | "replace"
+  ) => {
     if (!files?.length) return;
-    setUploadingDesignRef(true);
+    setDesignRefUploadMode(mode);
     setBanner(null);
     try {
       const body = new FormData();
       Array.from(files).forEach((f) => body.append("screenshots", f));
+      if (mode === "replace") body.append("replace", "true");
       const res = await fetch("/api/upload-design-reference", {
         method: "POST",
         body,
@@ -537,12 +547,55 @@ export function SettingsDashboard() {
       patch({ designReferencePaths: data.paths ?? [] });
       setBanner({
         type: "success",
-        message: `Added ${data.added ?? 0} reference screenshot(s). Phase 2 will match this design.`,
+        message:
+          mode === "replace"
+            ? `Replaced reference set with ${data.added ?? 0} screenshot(s). Phase 2 will match this design.`
+            : `Added ${data.added ?? 0} reference screenshot(s). Phase 2 will match this design.`,
       });
+      if (mode === "replace" && designRefReplaceInputRef.current) {
+        designRefReplaceInputRef.current.value = "";
+      }
+      if (mode === "add" && designRefAddInputRef.current) {
+        designRefAddInputRef.current.value = "";
+      }
     } catch {
       setBanner({ type: "error", message: "Screenshot upload failed." });
     } finally {
-      setUploadingDesignRef(false);
+      setDesignRefUploadMode(null);
+    }
+  };
+
+  const clearDesignReferences = async () => {
+    setClearingDesignRef(true);
+    setBanner(null);
+    try {
+      const res = await fetch("/api/upload-design-reference", {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({
+          type: "error",
+          message: data.error ?? "Could not clear reference screenshots.",
+        });
+        return;
+      }
+      patch({ designReferencePaths: [] });
+      if (designRefAddInputRef.current) designRefAddInputRef.current.value = "";
+      if (designRefReplaceInputRef.current) {
+        designRefReplaceInputRef.current.value = "";
+      }
+      setBanner({
+        type: "success",
+        message: "All reference screenshots removed.",
+      });
+    } catch {
+      setBanner({
+        type: "error",
+        message: "Could not clear reference screenshots.",
+      });
+    } finally {
+      setClearingDesignRef(false);
     }
   };
 
@@ -1191,44 +1244,79 @@ export function SettingsDashboard() {
               <p className="mt-1 text-xs text-muted">
                 Required for screenshot-only builds (no theme zip): upload full-page or
                 section captures. Grok vision recreates this layout and styling in Phase 2.
-                Up to 12 images. Copy and branding come from your business brief — not the
-                reference site.
+                Up to 12 images. Uploading a new set <strong className="font-medium text-slate-700">replaces</strong>{" "}
+                existing screenshots when you already have some saved — or use{" "}
+                <strong className="font-medium text-slate-700">Add more</strong> to append.
+                Copy and branding come from your business brief — not the reference site.
               </p>
               {!form.activeThemeZipPath && form.designReferencePaths.length > 0 ? (
                 <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
                   Screenshot-led mode active — no theme zip needed. Run Phase 2 after saving.
                 </p>
               ) : null}
-              <label
-                className={`mt-4 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center transition ${
-                  form.designReferencePaths.length >= 12
-                    ? "cursor-not-allowed opacity-60"
-                    : "cursor-pointer hover:border-primary/50 hover:bg-slate-100"
-                }`}
-              >
-                <Upload className="mb-2 h-6 w-6 text-muted" />
-                <span className="text-sm font-medium text-slate-700">
-                  {uploadingDesignRef
-                    ? "Uploading…"
-                    : form.designReferencePaths.length >= 12
-                      ? "12 reference screenshots added"
-                      : "Add reference screenshots (PNG, JPG, WebP)"}
-                </span>
-                <span className="mt-1 text-xs text-muted">
-                  {form.designReferencePaths.length} of 12 · multiple files · 8MB
-                  each
-                </span>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  multiple
-                  className="sr-only"
-                  disabled={
-                    uploadingDesignRef || form.designReferencePaths.length >= 12
-                  }
-                  onChange={(e) => uploadDesignReferences(e.target.files)}
-                />
-              </label>
+              {form.designReferencePaths.length > 0 ? (
+                <label
+                  className={`mt-4 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 px-4 py-6 text-center transition ${
+                    designRefBusy
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer hover:border-primary/60 hover:bg-primary/10"
+                  }`}
+                >
+                  <Upload className="mb-2 h-6 w-6 text-primary" />
+                  <span className="text-sm font-medium text-slate-800">
+                    {designRefUploadMode === "replace"
+                      ? "Uploading…"
+                      : "Replace with new screenshots (removes current set)"}
+                  </span>
+                  <span className="mt-1 text-xs text-muted">
+                    Up to 12 files · 8MB each · saves immediately
+                  </span>
+                  <input
+                    ref={designRefReplaceInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    multiple
+                    className="sr-only"
+                    disabled={designRefBusy}
+                    onChange={(e) =>
+                      void uploadDesignReferences(e.target.files, "replace")
+                    }
+                  />
+                </label>
+              ) : null}
+              {form.designReferencePaths.length < 12 ? (
+                <label
+                  className={`${form.designReferencePaths.length > 0 ? "mt-3" : "mt-4"} flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center transition ${
+                    designRefBusy
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer hover:border-primary/50 hover:bg-slate-100"
+                  }`}
+                >
+                  <Upload className="mb-2 h-6 w-6 text-muted" />
+                  <span className="text-sm font-medium text-slate-700">
+                    {designRefUploadMode === "add"
+                      ? "Uploading…"
+                      : form.designReferencePaths.length === 0
+                        ? "Add reference screenshots (PNG, JPG, WebP)"
+                        : "Add more screenshots (keeps existing)"}
+                  </span>
+                  <span className="mt-1 text-xs text-muted">
+                    {form.designReferencePaths.length} of 12 · multiple files · 8MB
+                    each
+                  </span>
+                  <input
+                    ref={designRefAddInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    multiple
+                    className="sr-only"
+                    disabled={designRefBusy}
+                    onChange={(e) =>
+                      void uploadDesignReferences(e.target.files, "add")
+                    }
+                  />
+                </label>
+              ) : null}
               {form.designReferencePaths.length > 0 ? (
                 <div className="mt-4 space-y-3">
                   <div className="flex flex-wrap gap-2">
@@ -1248,14 +1336,14 @@ export function SettingsDashboard() {
                   </div>
                   <button
                     type="button"
-                    className="text-xs font-medium text-red-600 hover:text-red-700"
-                    onClick={() => patch({ designReferencePaths: [] })}
+                    className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-60"
+                    disabled={designRefBusy}
+                    onClick={() => void clearDesignReferences()}
                   >
-                    Clear all reference screenshots
+                    {clearingDesignRef
+                      ? "Clearing…"
+                      : "Clear all reference screenshots"}
                   </button>
-                  <p className="text-xs text-muted">
-                    Save configuration after clearing to persist changes.
-                  </p>
                 </div>
               ) : null}
             </div>

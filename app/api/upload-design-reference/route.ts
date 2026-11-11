@@ -3,6 +3,7 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  deleteStoredDesignReferenceFiles,
   designReferencePublicPathForFilename,
   getDesignReferenceUploadDir,
 } from "@/lib/design-reference-storage";
@@ -56,14 +57,22 @@ export async function POST(request: NextRequest) {
 
     await ensureSiteConfigJsonIntegrity(SINGLE_CONFIG_ID);
 
+    const replace =
+      formData.get("replace") === "true" || formData.get("replace") === "1";
+
     const existing = await prisma.siteConfig.findUnique({
       where: { id: SINGLE_CONFIG_ID },
     });
-    const current = existing
+    let current = existing
       ? parseStringArray(
           (existing as { designReferencePaths?: unknown }).designReferencePaths
         )
       : [];
+
+    if (replace && current.length > 0) {
+      await deleteStoredDesignReferenceFiles(current);
+      current = [];
+    }
 
     const max = designReferenceMaxCount();
     const room = max - current.length;
@@ -103,10 +112,45 @@ export async function POST(request: NextRequest) {
       ok: true,
       paths,
       added: added.length,
+      replaced: replace,
     });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Design reference upload failed.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    await ensureSiteConfigJsonIntegrity(SINGLE_CONFIG_ID);
+
+    const existing = await prisma.siteConfig.findUnique({
+      where: { id: SINGLE_CONFIG_ID },
+    });
+    const current = existing
+      ? parseStringArray(
+          (existing as { designReferencePaths?: unknown }).designReferencePaths
+        )
+      : [];
+
+    if (current.length > 0) {
+      await deleteStoredDesignReferenceFiles(current);
+    }
+
+    if (existing) {
+      await prisma.siteConfig.update({
+        where: { id: SINGLE_CONFIG_ID },
+        data: {
+          designReferencePaths: [],
+        } as Record<string, unknown>,
+      });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not clear reference screenshots.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

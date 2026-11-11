@@ -110,10 +110,11 @@ const SETUP_STEPS: Step[] = [
           </li>
           <li>
             <strong>Reference website screenshots</strong> (up to 12, 8 MB each) —
-            Grok vision recreates this layout and style. If no theme zip is
-            uploaded, screenshot-led mode turns on automatically and the
-            screenshots become the full design spec. Use 2–3 clear full-page
-            screenshots; more images make Phase 2 slower.
+            Grok vision recreates this layout and style. If you already have
+            screenshots, use <strong>Replace with new screenshots</strong> to swap
+            the whole set, or <strong>Add more</strong> to append until 12.
+            <strong> Clear all</strong> removes them without saving again. If no
+            theme zip is uploaded, screenshot-led mode turns on automatically.
           </li>
         </ul>
       </>
