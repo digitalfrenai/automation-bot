@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "node scripts/prepare-database.cjs && prisma generate && next build",
-    "start": "sh scripts/docker-entrypoint.sh",
+    "start": "node scripts/cpanel-start.cjs",
+    "start:docker": "sh scripts/docker-entrypoint.sh",
     "start:server": "next start -H 0.0.0.0",
     "lint": "eslint",
     "postinstall": "node scripts/postinstall-prisma.cjs",
@@ -24,7 +25,8 @@
     "sharp": "^0.34.5",
     "ssh2": "^1.17.0",
     "ssh2-sftp-client": "^12.0.1",
-    "undici": "^8.11.2"
+    "undici": "^8.11.2",
+    "prisma": "^6.16.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
@@ -36,7 +38,6 @@
     "@types/ssh2": "^1.15.6",
     "eslint": "^9.34.0",
     "eslint-config-next": "^15.5.0",
-    "prisma": "^6.16.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.9.0"
   },

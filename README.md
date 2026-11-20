@@ -63,4 +63,6 @@ Copy `.env.example` to `.env` and set `DATABASE_URL` (default SQLite file: `pris
 
 **Recommended:** [Railway](https://railway.com) — GitHub connect + **volume on `/data`** (same “push to deploy” feel as Vercel, but with persistent SQLite and theme uploads). See **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
+**cPanel AI App Hosting:** see **[docs/CPANEL-DEPLOY.md](docs/CPANEL-DEPLOY.md)** (MySQL, `npm run build`, `npm start`).
+
 Vercel is not recommended until the app uses Postgres + blob storage + background jobs for long pipelines.
