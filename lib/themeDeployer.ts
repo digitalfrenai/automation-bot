@@ -122,8 +122,26 @@ export async function deployThemeZip(
   }
 
   if (!hasRemoteShellCredentials(config)) {
-    const message =
-      "SFTP credentials missing; skipping remote theme upload (local zip retained).";
+    const localZipPath = resolveLocalThemePath(config.activeThemeZipPath);
+    try {
+      await fs.access(localZipPath);
+    } catch {
+      throw new Error(`Theme zip not found at ${localZipPath}`);
+    }
+    const { ensureBotBridgeInstalled } = await import("@/lib/wordpress-bot-bridge");
+    await ensureBotBridgeInstalled(config, onLog);
+    const { deployThemeViaWordPressBridge } = await import(
+      "@/lib/theme-bridge-install"
+    );
+    const bridge = await deployThemeViaWordPressBridge(config, localZipPath, onLog);
+    if (bridge.ok) {
+      return {
+        skipped: false,
+        themeSlug: bridge.themeSlug,
+        message: bridge.message,
+      };
+    }
+    const message = `${bridge.message} Add SFTP credentials or install the WordPress Bot REST bridge (mu-plugin) with install_themes capability.`;
     log.warn(message, { phase: "setup" });
     return { skipped: true, message };
   }

@@ -57,6 +57,20 @@ model SiteConfig {
   blogIncludeExternalLinks Boolean @default(true)
   /// When non-empty, all posts in a Phase 4 run use this WordPress category
   blogCategory             String  @default("")
+  /// Manual single-post run: Grok rewrites this reference article URL
+  blogReferencePostUrl     String?
+  /// Manual run title / H1 topic
+  blogRunContentTopic      String?
+  /// LSI / keyword phrases for manual blog run (JSON array)
+  blogRunKeywords          Json     @default("[]")
+  /// Up to 3 local upload paths for manual blog + social images
+  blogRunImagePaths        Json     @default("[]")
+  /// Optional Google Drive folder link (documentation; prefer uploads)
+  blogImagesDriveFolderUrl String?
+  /// Site page image library uploads (avoid Grok image generation)
+  pageImageUploadPaths     Json     @default("[]")
+  /// Optional Drive folder for page image matching
+  pageImagesDriveFolderUrl String?
 
   /// Phase 5 — content older than this many days is a refresh candidate
   updateMaxAgeDays         Int     @default(90)

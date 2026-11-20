@@ -138,7 +138,7 @@ export function resolveScaffoldPage(options: {
 
   if (options.storedPageId) {
     const byId = options.pages.find((p) => p.id === options.storedPageId);
-    if (byId) {
+    if (byId && pageMatchesScaffoldTarget(byId, title)) {
       return byId;
     }
   }

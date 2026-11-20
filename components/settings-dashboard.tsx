@@ -13,6 +13,7 @@ import {
   Rocket,
   Save,
   Share2,
+  Trash2,
   Upload,
   Wifi,
 } from "lucide-react";
@@ -72,6 +73,13 @@ type FormState = {
   blogRequireApproval: boolean;
   blogIncludeExternalLinks: boolean;
   blogCategory: string;
+  blogReferencePostUrl: string;
+  blogRunContentTopic: string;
+  blogRunKeywords: string;
+  blogRunImagePaths: string[];
+  blogImagesDriveFolderUrl: string;
+  pageImageUploadPaths: string[];
+  pageImagesDriveFolderUrl: string;
   updateMaxAgeDays: number;
   updateRequireApproval: boolean;
   updateRefreshPages: boolean;
@@ -140,10 +148,17 @@ const initialForm: FormState = {
   targetKeywords: [],
   pagesToBuild: [...DEFAULT_PAGES],
   activeThemeZipPath: "",
-  blogPostsPerRun: 3,
+  blogPostsPerRun: 1,
   blogRequireApproval: true,
   blogIncludeExternalLinks: true,
   blogCategory: "",
+  blogReferencePostUrl: "",
+  blogRunContentTopic: "",
+  blogRunKeywords: "",
+  blogRunImagePaths: [],
+  blogImagesDriveFolderUrl: "",
+  pageImageUploadPaths: [],
+  pageImagesDriveFolderUrl: "",
   updateMaxAgeDays: 90,
   updateRequireApproval: true,
   updateRefreshPages: true,
@@ -342,7 +357,7 @@ export function SettingsDashboard() {
               ? data.config.pagesToBuild
               : [...DEFAULT_PAGES],
             activeThemeZipPath: data.config.activeThemeZipPath ?? "",
-            blogPostsPerRun: data.config.blogPostsPerRun ?? 3,
+            blogPostsPerRun: data.config.blogPostsPerRun ?? 1,
             blogRequireApproval: data.config.blogRequireApproval !== false,
             blogIncludeExternalLinks:
               data.config.blogIncludeExternalLinks !== false,
@@ -350,6 +365,15 @@ export function SettingsDashboard() {
               typeof data.config.blogCategory === "string"
                 ? data.config.blogCategory
                 : "",
+            blogReferencePostUrl: data.config.blogReferencePostUrl ?? "",
+            blogRunContentTopic: data.config.blogRunContentTopic ?? "",
+            blogRunKeywords: Array.isArray(data.config.blogRunKeywords)
+              ? data.config.blogRunKeywords.join(", ")
+              : "",
+            blogRunImagePaths: data.config.blogRunImagePaths ?? [],
+            blogImagesDriveFolderUrl: data.config.blogImagesDriveFolderUrl ?? "",
+            pageImageUploadPaths: data.config.pageImageUploadPaths ?? [],
+            pageImagesDriveFolderUrl: data.config.pageImagesDriveFolderUrl ?? "",
             updateMaxAgeDays: data.config.updateMaxAgeDays ?? 90,
             updateRequireApproval: data.config.updateRequireApproval !== false,
             updateRefreshPages: data.config.updateRefreshPages !== false,
@@ -599,6 +623,86 @@ export function SettingsDashboard() {
     }
   };
 
+  const uploadPageImages = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const body = new FormData();
+    for (const file of Array.from(fileList)) {
+      body.append("images", file);
+    }
+    try {
+      const res = await fetch("/api/upload-page-image", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({ type: "error", message: data.error ?? "Page image upload failed." });
+        return;
+      }
+      patch({ pageImageUploadPaths: data.paths ?? [] });
+      setBanner({
+        type: "success",
+        message: `Saved ${data.added ?? 0} page image(s). Save configuration to keep Drive URL.`,
+      });
+    } catch {
+      setBanner({ type: "error", message: "Page image upload failed." });
+    }
+  };
+
+  const importDriveImages = async (target: "page" | "blog") => {
+    const folderUrl =
+      target === "blog"
+        ? form.blogImagesDriveFolderUrl.trim()
+        : form.pageImagesDriveFolderUrl.trim();
+    if (!folderUrl) {
+      setBanner({ type: "error", message: "Paste a Google Drive folder link first." });
+      return;
+    }
+    try {
+      const res = await fetch("/api/import-drive-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderUrl, target, replace: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({ type: "error", message: data.error ?? "Drive import failed." });
+        return;
+      }
+      if (target === "blog") {
+        patch({ blogRunImagePaths: data.paths ?? [] });
+      } else {
+        patch({ pageImageUploadPaths: data.paths ?? [] });
+      }
+      setBanner({
+        type: "success",
+        message: `Imported ${data.downloaded ?? 0} image(s) from Google Drive.`,
+      });
+    } catch {
+      setBanner({ type: "error", message: "Drive import failed." });
+    }
+  };
+
+  const uploadBlogImages = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const body = new FormData();
+    for (const file of Array.from(fileList)) {
+      body.append("images", file);
+    }
+    try {
+      const res = await fetch("/api/upload-blog-image", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) {
+        setBanner({ type: "error", message: data.error ?? "Blog image upload failed." });
+        return;
+      }
+      patch({ blogRunImagePaths: data.paths ?? [] });
+      setBanner({
+        type: "success",
+        message: `Blog images: ${(data.paths ?? []).length}/3 uploaded.`,
+      });
+    } catch {
+      setBanner({ type: "error", message: "Blog image upload failed." });
+    }
+  };
+
   const uploadTheme = async (file: File | null) => {
     if (!file) return;
     setUploading(true);
@@ -834,11 +938,134 @@ export function SettingsDashboard() {
   };
 
   const launchAutomation = async () => {
-    await streamPipeline(
-      "/api/run-pipeline",
-      { configId: SINGLE_CONFIG_ID },
-      "Phases 1–3 completed successfully."
-    );
+    const pages =
+      form.pagesToBuild.length > 0 ? form.pagesToBuild : [...DEFAULT_PAGES];
+
+    setIsPipelineRunning(true);
+    setPipelineStatus("RUNNING");
+    setLogs([]);
+    setBanner({
+      type: "info",
+      message:
+        "Phases 1–3 — Phase 1 once, then one Railway request per page (avoids 15-minute timeout).",
+    });
+
+    try {
+      const phase1Ok = await streamPipeline(
+        "/api/run-phase1",
+        { configId: SINGLE_CONFIG_ID },
+        "",
+        { manageRunningState: false }
+      );
+      if (!phase1Ok) {
+        setBanner({ type: "error", message: "Phase 1 failed — fix logs and retry." });
+        setPipelineStatus("FAILED");
+        return;
+      }
+
+      for (let i = 0; i < pages.length; i++) {
+        const pageTitle = pages[i]!;
+        appendLog({
+          timestamp: new Date().toISOString(),
+          level: "info",
+          phase: "setup",
+          message: `——— Phases 2–3: ${pageTitle} (${i + 1}/${pages.length}) ———`,
+          pageTitle,
+        });
+
+        const p2 = await streamPipeline(
+          "/api/run-phase2",
+          { configId: SINGLE_CONFIG_ID, pageTitle },
+          "",
+          { appendLogs: true, manageRunningState: false }
+        );
+        if (!p2) {
+          setBanner({
+            type: "error",
+            message: `Stopped at Phase 2 for "${pageTitle}". Finished pages are saved.`,
+          });
+          setPipelineStatus("FAILED");
+          return;
+        }
+
+        const p3 = await streamPipeline(
+          "/api/run-phase3",
+          { configId: SINGLE_CONFIG_ID, pageTitle },
+          i === pages.length - 1 ? "" : "",
+          { appendLogs: true, manageRunningState: false }
+        );
+        if (!p3) {
+          setBanner({
+            type: "error",
+            message: `Stopped at Phase 3 for "${pageTitle}". Re-run Phase 3 for remaining pages.`,
+          });
+          setPipelineStatus("FAILED");
+          return;
+        }
+      }
+
+      setPipelineStatus("COMPLETED");
+      setBanner({
+        type: "success",
+        message: "Phases 1–3 completed successfully.",
+      });
+    } finally {
+      setIsPipelineRunning(false);
+      await loadJobHistory();
+    }
+  };
+
+  const resetHosting = async () => {
+    if (
+      !window.confirm(
+        "Remove SFTP credentials and the uploaded theme zip from this dashboard?"
+      )
+    ) {
+      return;
+    }
+    const res = await fetch("/api/reset-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "hosting" }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setBanner({ type: "error", message: data.error ?? "Could not clear hosting." });
+      return;
+    }
+    patch({
+      sftpHost: "",
+      sftpPort: "22",
+      sftpUsername: "",
+      sftpPassword: "",
+      activeThemeZipPath: "",
+    });
+    setBanner({ type: "success", message: data.message });
+  };
+
+  const resetAll = async () => {
+    if (
+      !window.confirm(
+        "Reset brief, uploads, scaffold map, and job history? Credentials (xAI + WordPress) stay — change WP URL if switching sites."
+      )
+    ) {
+      return;
+    }
+    const res = await fetch("/api/reset-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "all" }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setBanner({ type: "error", message: data.error ?? "Reset failed." });
+      return;
+    }
+    setForm({ ...initialForm, xaiApiKey: form.xaiApiKey, wpUrl: form.wpUrl, wpUsername: form.wpUsername, wpAppPassword: form.wpAppPassword });
+    setLogs([]);
+    setPipelineStatus("IDLE");
+    setBanner({ type: "success", message: data.message });
+    await loadJobHistory();
   };
 
   const launchPhase1 = async () => {
@@ -1118,6 +1345,24 @@ export function SettingsDashboard() {
                 />
               </Field>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={resetHosting}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-900 hover:bg-red-100"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove SFTP &amp; theme zip
+              </button>
+            </div>
+            {form.activeThemeZipPath && !form.sftpHost.trim() ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                No SFTP — Phase 1 will try installing the zip via the{" "}
+                <strong>WordPress Bot REST bridge</strong> (mu-plugin) when your app
+                password can <code className="text-xs">install_themes</code>. Otherwise
+                upload the theme in wp-admin or add SFTP.
+              </p>
+            ) : null}
             <div>
               <p className="mb-2 text-sm font-medium text-slate-700">
                 Theme (.zip){" "}
@@ -1382,6 +1627,56 @@ export function SettingsDashboard() {
               tags={form.targetKeywords}
               onChange={(targetKeywords) => patch({ targetKeywords })}
             />
+            <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Site page images (optional)
+              </h3>
+              <p className="mt-1 text-xs text-muted">
+                Upload photos for Phase 2/3 page slots instead of Grok image generation
+                (saves time and avoids timeouts). Images are mapped to slots in order.
+                You can also save a Google Drive folder link for your records — download
+                and upload files here for reliable automation.
+              </p>
+              <Field label="Google Drive folder">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    className={inputClass}
+                    value={form.pageImagesDriveFolderUrl}
+                    onChange={(e) =>
+                      patch({ pageImagesDriveFolderUrl: e.target.value })
+                    }
+                    placeholder="https://drive.google.com/drive/folders/…"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void importDriveImages("page")}
+                    className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/15"
+                  >
+                    Import from Drive
+                  </button>
+                </div>
+              </Field>
+              <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
+                <Upload className="mb-2 h-6 w-6 text-muted" />
+                <span className="text-sm font-medium text-slate-800">
+                  Upload page images
+                </span>
+                <span className="text-xs text-muted">Up to 24 · 8MB each</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="sr-only"
+                  onChange={(e) => void uploadPageImages(e.target.files)}
+                />
+              </label>
+              {form.pageImageUploadPaths.length > 0 ? (
+                <p className="mt-2 text-xs text-muted">
+                  {form.pageImageUploadPaths.length} file(s) ready for Phase 2 (Grok
+                  images skipped when this list is set).
+                </p>
+              ) : null}
+            </div>
           </section>
         )}
 
@@ -1463,22 +1758,75 @@ export function SettingsDashboard() {
                 Blog Generation (Phase 4)
               </h2>
               <p className="text-sm text-muted">
-                Topic → Grok → structured blog HTML → SEO check → auto-fix →
-                publish or draft.
+                One blog per run. Fill the manual fields below to rewrite a reference
+                article with your keywords and 3 uploaded images (no Grok image generation).
+                Leave manual fields empty to auto-generate topics from the business brief.
               </p>
             </div>
-            <Field label="Posts per run">
+            <Field label="Content topic (manual run title)">
               <input
-                type="number"
-                min={1}
-                max={10}
                 className={inputClass}
-                value={form.blogPostsPerRun}
-                onChange={(e) =>
-                  patch({ blogPostsPerRun: Number(e.target.value) || 1 })
-                }
+                value={form.blogRunContentTopic}
+                onChange={(e) => patch({ blogRunContentTopic: e.target.value })}
+                placeholder="e.g. 3D Printing Plastics: Complete Materials Guide 2024"
               />
             </Field>
+            <Field label="LSI / keywords (comma-separated)">
+              <input
+                className={inputClass}
+                value={form.blogRunKeywords}
+                onChange={(e) => patch({ blogRunKeywords: e.target.value })}
+                placeholder="ABS Plastic 3D Printing Service, …"
+              />
+            </Field>
+            <Field label="Reference blog URL (already made article)">
+              <input
+                className={inputClass}
+                value={form.blogReferencePostUrl}
+                onChange={(e) => patch({ blogReferencePostUrl: e.target.value })}
+                placeholder="https://example.com/blogs/…"
+              />
+            </Field>
+            <Field label="Google Drive folder (your 3 blog images)">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  className={inputClass}
+                  value={form.blogImagesDriveFolderUrl}
+                  onChange={(e) =>
+                    patch({ blogImagesDriveFolderUrl: e.target.value })
+                  }
+                  placeholder="https://drive.google.com/drive/folders/…"
+                />
+                <button
+                  type="button"
+                  onClick={() => void importDriveImages("blog")}
+                  className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/15"
+                >
+                  Import from Drive
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Folder must be viewable by anyone with the link (up to 3 images).
+              </p>
+            </Field>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-slate-50 px-4 py-6 text-center hover:bg-slate-100">
+              <Upload className="mb-2 h-6 w-6 text-muted" />
+              <span className="text-sm font-medium text-slate-800">
+                Upload up to 3 blog images
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="sr-only"
+                onChange={(e) => void uploadBlogImages(e.target.files)}
+              />
+            </label>
+            {form.blogRunImagePaths.length > 0 ? (
+              <p className="text-xs text-muted">
+                {form.blogRunImagePaths.length} image(s) stored for this run.
+              </p>
+            ) : null}
             <Field label="Blog category (optional)">
               <input
                 type="text"
@@ -1695,9 +2043,11 @@ export function SettingsDashboard() {
                 Social Media (Phase 6)
               </h2>
               <p className="text-sm text-muted">
-                Off by default so Phases 1–5 keep working unchanged. When enabled,
-                Grok creates platform captions, hashtags, and promo snippets after
-                blogs (and optionally updates).
+                Off by default so Phases 1–5 keep working unchanged. With{" "}
+                <strong>manual blog</strong> (Phase 4), captions for X, LinkedIn,
+                Facebook, and Instagram are generated together and published
+                immediately when API tokens are set (one random uploaded blog image
+                per run).
               </p>
             </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-white px-4 py-3">
@@ -2092,6 +2442,15 @@ export function SettingsDashboard() {
           >
             <GitBranch className="h-4 w-4" />
             Phase 7 E2E
+          </button>
+          <button
+            type="button"
+            onClick={() => void resetAll()}
+            disabled={isPipelineRunning}
+            className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            RESET ALL
           </button>
         </div>
       </footer>

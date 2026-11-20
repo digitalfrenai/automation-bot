@@ -214,8 +214,20 @@ const BUILD_STEPS: Step[] = [
     where: "Footer → Phases 1–3 (all)",
     body: (
       <p>
-        Runs setup, content, and publish in sequence for a complete first build.
-        Use the single-phase buttons afterwards for targeted re-runs.
+        Runs Phase 1 once, then Phase 2 and Phase 3 <strong>per page</strong> (one
+        Railway request each) so long builds do not hit the 15-minute HTTP limit.
+        Use single-phase buttons for targeted re-runs.
+      </p>
+    ),
+  },
+  {
+    title: "RESET ALL / Remove hosting",
+    where: "Footer RESET ALL · Hosting → Remove SFTP & theme zip",
+    body: (
+      <p>
+        <strong>RESET ALL</strong> clears brief, uploads, scaffold map, and job
+        history (credentials stay). Use it when switching client sites.{" "}
+        <strong>Remove SFTP &amp; theme zip</strong> clears hosting fields only.
       </p>
     ),
   },
@@ -228,13 +240,15 @@ const AUTOMATION_STEPS: Step[] = [
     body: (
       <>
         <p>
-          Set <strong>Posts per run</strong> (1–10). Grok proposes topics from your
-          keywords and brief, writes structured blog HTML, runs the SEO audit, then
-          publishes. Enable <strong>Require human approval</strong> to save posts as
-          WordPress drafts for review instead. <strong>Include external reference
-          links</strong> adds 1–2 reputable outbound links.
+          <strong>Manual mode (recommended):</strong> set Content topic, LSI keywords,
+          reference blog URL, and upload or <strong>Import from Drive</strong> up to 3
+          images. One blog per run — Grok rewrites the reference article (no Grok
+          images). With Social enabled, captions for all platforms run after the post.
         </p>
-        <p>Run it from the tab or the footer button “Phase 4 Blog”.</p>
+        <p>
+          Leave manual fields empty for auto topic generation from the business brief.
+          Enable <strong>Require human approval</strong> to save drafts.
+        </p>
       </>
     ),
   },

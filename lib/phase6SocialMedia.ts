@@ -122,6 +122,13 @@ export type SocialSourceInput = {
   sourceType?: "blog" | "page_update" | "post_update" | "manual";
   blogPostRecordId?: string;
   wpPostId?: number;
+  /** Public path e.g. /uploads/blog-images/… — one of the 3 manual blog images */
+  shareImagePublicPath?: string;
+};
+
+export type Phase6RunOptions = {
+  /** When true, attempt API publish for every platform (if tokens exist) after captions are saved */
+  publishNow?: boolean;
 };
 
 export type Phase6SocialResult = {
@@ -156,7 +163,8 @@ async function recordTask(
 export async function executePhase6ForSource(
   configId: string,
   source: SocialSourceInput,
-  onLog?: LogSink
+  onLog?: LogSink,
+  runOptions?: Phase6RunOptions
 ): Promise<Phase6SocialResult[]> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const config = await loadSiteConfig(configId);
@@ -170,7 +178,9 @@ export async function executePhase6ForSource(
 
   const platforms = parseSocialPlatforms(config.socialPlatforms);
   const client = createGrokClient(config);
-  const requireApproval = config.socialRequireApproval;
+  const requireApproval = runOptions?.publishNow
+    ? false
+    : config.socialRequireApproval;
 
   log.info(
     `Phase 6: generating social posts for "${source.title}" (${platforms.join(", ")})…`,
@@ -190,7 +200,18 @@ export async function executePhase6ForSource(
   }
 
   let mediaUrl: string | null = null;
-  if (source.wpPostId) {
+  if (source.shareImagePublicPath?.trim()) {
+    const { prepareShareImageFromBlogUpload } = await import(
+      "@/lib/social-blog-image"
+    );
+    mediaUrl = await prepareShareImageFromBlogUpload(
+      config,
+      source.shareImagePublicPath.trim(),
+      source.title,
+      onLog
+    );
+  }
+  if (!mediaUrl && source.wpPostId) {
     try {
       mediaUrl = await prepareWatermarkedBlogImageForSocial(
         config,
@@ -242,7 +263,9 @@ export async function executePhase6ForSource(
 
   const variants = parseSocialVariants(content, platforms);
   const results: Phase6SocialResult[] = [];
-  const delayHours = Math.max(0, config.socialScheduleDelayHours);
+  const delayHours = runOptions?.publishNow
+    ? 0
+    : Math.max(0, config.socialScheduleDelayHours);
   const scheduledAt =
     !requireApproval && delayHours > 0
       ? new Date(Date.now() + delayHours * 60 * 60 * 1000)

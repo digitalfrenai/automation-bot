@@ -746,21 +746,39 @@ export async function enrichPreparedContentWithPageImages(
 
   const slotsToFill = slots;
 
+  const libraryOnly = (await import("@/lib/page-image-library")).hasPageImageLibrary(
+    config
+  );
+
   log.info(
-    `Page images: ${slotsToFill.length} slot(s) for "${pageTitle}" (theme catalog: ${catalog.length}, AI fallback: ${pageImagesUseAi() ? "on" : "off"})…`,
+    libraryOnly
+      ? `Page images: ${slotsToFill.length} slot(s) for "${pageTitle}" (uploaded library — Grok images off).`
+      : `Page images: ${slotsToFill.length} slot(s) for "${pageTitle}" (theme catalog: ${catalog.length}, AI fallback: ${pageImagesUseAi() ? "on" : "off"})…`,
     { phase: logPhase, pageTitle, pageId }
   );
 
-  let uploaded = await fillSlotsFromThemeCatalog(
+  let uploaded = libraryOnly
+    ? await (await import("@/lib/page-image-library")).fillSlotsFromUploadedLibrary(
+        config,
+        pageTitle,
+        slotsToFill,
+        onLog,
+        logPhase
+      )
+    : await fillSlotsFromThemeCatalog(
     config,
     pageTitle,
     slotsToFill,
     catalog,
     themeSlug,
     onLog
-  );
+      );
 
-  if (uploaded.length < slotsToFill.length && pageImagesUseAi()) {
+  if (
+    !libraryOnly &&
+    uploaded.length < slotsToFill.length &&
+    pageImagesUseAi()
+  ) {
     const client = createGrokClient(config);
     uploaded = await fillRemainingSlotsWithAi(
       config,
@@ -771,7 +789,7 @@ export async function enrichPreparedContentWithPageImages(
       onLog,
       logPhase
     );
-  } else if (uploaded.length < slotsToFill.length) {
+  } else if (!libraryOnly && uploaded.length < slotsToFill.length) {
     log.warn(
       "Some image slots unfilled (theme upload failed and PAGE_IMAGES_AI=false).",
       { phase: logPhase, pageTitle, pageId }

@@ -34,6 +34,13 @@ function buildConfigData(body: SiteConfigInput) {
     targetKeywords: parseStringArray(body.targetKeywords),
     pagesToBuild: pagesToBuild.length > 0 ? pagesToBuild : [...DEFAULT_PAGES],
     activeThemeZipPath: body.activeThemeZipPath?.trim() || null,
+    blogReferencePostUrl: body.blogReferencePostUrl?.trim() || null,
+    blogRunContentTopic: body.blogRunContentTopic?.trim() || null,
+    blogRunKeywords: parseStringArray(body.blogRunKeywords),
+    blogRunImagePaths: parseStringArray(body.blogRunImagePaths).slice(0, 3),
+    blogImagesDriveFolderUrl: body.blogImagesDriveFolderUrl?.trim() || null,
+    pageImageUploadPaths: parseStringArray(body.pageImageUploadPaths),
+    pageImagesDriveFolderUrl: body.pageImagesDriveFolderUrl?.trim() || null,
     ...maintenance,
     ...(body.status ? { status: body.status } : {}),
   };

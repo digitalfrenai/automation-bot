@@ -36,6 +36,13 @@ export type SiteConfigInput = {
   blogRequireApproval?: boolean;
   blogIncludeExternalLinks?: boolean;
   blogCategory?: string;
+  blogReferencePostUrl?: string | null;
+  blogRunContentTopic?: string | null;
+  blogRunKeywords?: string[];
+  blogRunImagePaths?: string[];
+  blogImagesDriveFolderUrl?: string | null;
+  pageImageUploadPaths?: string[];
+  pageImagesDriveFolderUrl?: string | null;
   updateMaxAgeDays?: number;
   updateRequireApproval?: boolean;
   updateRefreshPages?: boolean;
@@ -106,6 +113,13 @@ export function siteConfigToClient(config: {
   blogRequireApproval: boolean;
   blogIncludeExternalLinks: boolean;
   blogCategory: string;
+  blogReferencePostUrl: string | null;
+  blogRunContentTopic: string | null;
+  blogRunKeywords: unknown;
+  blogRunImagePaths: unknown;
+  blogImagesDriveFolderUrl: string | null;
+  pageImageUploadPaths: unknown;
+  pageImagesDriveFolderUrl: string | null;
   updateMaxAgeDays: number;
   updateRequireApproval: boolean;
   updateRefreshPages: boolean;
@@ -137,13 +151,16 @@ export function siteConfigToClient(config: {
     targetKeywords: parseStringArray(config.targetKeywords),
     pagesToBuild: parseStringArray(config.pagesToBuild),
     socialPlatforms: parseStringArray(config.socialPlatforms),
+    blogRunKeywords: parseStringArray(config.blogRunKeywords),
+    blogRunImagePaths: parseStringArray(config.blogRunImagePaths),
+    pageImageUploadPaths: parseStringArray(config.pageImageUploadPaths),
   };
 }
 
 export function normalizeMaintenanceSettings(body: SiteConfigInput) {
   const platforms = parseStringArray(body.socialPlatforms);
   return {
-    blogPostsPerRun: clampInt(body.blogPostsPerRun, 3, 1, 10),
+    blogPostsPerRun: clampInt(body.blogPostsPerRun, 1, 1, 1),
     blogRequireApproval: body.blogRequireApproval !== false,
     blogIncludeExternalLinks: body.blogIncludeExternalLinks !== false,
     blogCategory:

@@ -426,6 +426,19 @@ export async function executePhase4(
 ): Promise<Phase4PostResult[]> {
   const log = createPipelineLogger(onLog ?? (() => undefined));
   const config = await loadSiteConfig(configId);
+
+  const { manualBlogRunConfigured, executeManualBlogRun } = await import(
+    "@/lib/blog-manual-run"
+  );
+  if (manualBlogRunConfigured(config)) {
+    log.info(
+      "Phase 4 manual blog run (reference URL + content topic + uploaded images).",
+      { phase: "phase4" }
+    );
+    const result = await executeManualBlogRun(configId, onLog);
+    return [result];
+  }
+
   const count = options?.topicCount ?? config.blogPostsPerRun;
 
   log.info(

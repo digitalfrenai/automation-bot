@@ -15,6 +15,17 @@ type WpTag = {
   name: string;
 };
 
+export async function setPostFeaturedMedia(
+  config: LoadedSiteConfig,
+  postId: number,
+  mediaId: number
+): Promise<void> {
+  await wpRequest(config, `/wp-json/wp/v2/posts/${postId}`, {
+    method: "POST",
+    body: JSON.stringify({ featured_media: mediaId }),
+  });
+}
+
 export async function fetchPostFeaturedImageUrl(
   config: LoadedSiteConfig,
   postId: number

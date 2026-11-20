@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WordPress Bot REST Bridge
  * Description: Exposes theme_mod updates (custom logo and Braine Redux logos) for the automation dashboard. Must-use plugin.
- * Version: 1.4.0
+ * Version: 1.5.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -193,6 +193,99 @@ add_action(
 					),
 					'source_url' => array(
 						'required' => false,
+						'type'     => 'string',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			'wordpress-bot/v1',
+			'/theme/install-zip',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => static function () {
+					return current_user_can( 'install_themes' );
+				},
+				'callback'            => static function () {
+					$files = $_FILES['theme_zip'] ?? null;
+					if ( empty( $files ) || empty( $files['tmp_name'] ) || ! is_uploaded_file( $files['tmp_name'] ) ) {
+						return new WP_Error(
+							'wordpress_bot_no_zip',
+							'Multipart field theme_zip is required.',
+							array( 'status' => 400 )
+						);
+					}
+					require_once ABSPATH . 'wp-admin/includes/file.php';
+					require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+					require_once ABSPATH . 'wp-admin/includes/theme.php';
+					if ( ! WP_Filesystem() ) {
+						return new WP_Error(
+							'wordpress_bot_fs',
+							'WordPress filesystem not available.',
+							array( 'status' => 500 )
+						);
+					}
+					$skin     = class_exists( 'WP_Ajax_Upgrader_Skin' )
+						? new WP_Ajax_Upgrader_Skin()
+						: new Automatic_Upgrader_Skin();
+					$upgrader = new Theme_Upgrader( $skin );
+					$result   = $upgrader->install( $files['tmp_name'], array( 'overwrite_package' => true ) );
+					if ( is_wp_error( $result ) ) {
+						return $result;
+					}
+					if ( ! $result ) {
+						return new WP_Error(
+							'wordpress_bot_install_failed',
+							'Theme install failed.',
+							array( 'status' => 500 )
+						);
+					}
+					$slug = is_string( $upgrader->theme_info() ) ? $upgrader->theme_info() : '';
+					if ( '' === $slug && is_object( $upgrader->theme_info ) ) {
+						$slug = $upgrader->theme_info()->get_stylesheet();
+					}
+					return rest_ensure_response(
+						array(
+							'installed'      => true,
+							'theme_slug'     => $slug,
+							'bridge_version' => 5,
+						)
+					);
+				},
+			)
+		);
+
+		register_rest_route(
+			'wordpress-bot/v1',
+			'/theme/activate',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => static function () {
+					return current_user_can( 'switch_themes' );
+				},
+				'callback'            => static function ( WP_REST_Request $request ) {
+					$slug = sanitize_key( (string) $request->get_param( 'theme_slug' ) );
+					if ( '' === $slug ) {
+						return new WP_Error(
+							'wordpress_bot_bad_slug',
+							'theme_slug is required.',
+							array( 'status' => 400 )
+						);
+					}
+					switch_theme( $slug );
+					return rest_ensure_response(
+						array(
+							'activated'      => true,
+							'theme_slug'     => $slug,
+							'stylesheet'     => get_stylesheet(),
+							'bridge_version' => 5,
+						)
+					);
+				},
+				'args'                => array(
+					'theme_slug' => array(
+						'required' => true,
 						'type'     => 'string',
 					),
 				),
