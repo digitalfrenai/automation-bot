@@ -15,8 +15,8 @@ case "${DATABASE_URL:-}" in
     export UPLOAD_THEMES_DIR="${UPLOAD_THEMES_DIR:-$PWD/storage/uploads/themes}"
     export UPLOAD_LOGOS_DIR="${UPLOAD_LOGOS_DIR:-$PWD/storage/uploads/logos}"
     export UPLOAD_DESIGN_REFERENCES_DIR="${UPLOAD_DESIGN_REFERENCES_DIR:-$PWD/storage/uploads/design-references}"
-    npx prisma generate
-    npx prisma db push --accept-data-loss
+    node scripts/prisma-run.cjs generate
+    node scripts/prisma-run.cjs db push --accept-data-loss
     ;;
   *)
 DATA_ROOT="${RAILWAY_VOLUME_MOUNT_PATH:-/data}"
@@ -43,7 +43,7 @@ echo "UPLOAD_LOGOS_DIR=${UPLOAD_LOGOS_DIR}"
 ls -la "$DATA_ROOT" 2>/dev/null || echo "Cannot list ${DATA_ROOT}"
 ls -la "$DATA_ROOT/prisma" 2>/dev/null || echo "Cannot list ${DATA_ROOT}/prisma"
 
-npx prisma db push
+node scripts/prisma-run.cjs db push
 touch "${DATA_ROOT}/prisma/.write-test" && rm -f "${DATA_ROOT}/prisma/.write-test"
     ;;
 esac

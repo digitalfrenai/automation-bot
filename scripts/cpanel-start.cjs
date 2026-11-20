@@ -47,8 +47,8 @@ if (isMysql) {
   fs.mkdirSync(process.env.UPLOAD_LOGOS_DIR, { recursive: true });
   fs.mkdirSync(process.env.UPLOAD_DESIGN_REFERENCES_DIR, { recursive: true });
   console.log("DATABASE_URL=(mysql)");
-  run("npx", ["prisma", "generate"]);
-  run("npx", ["prisma", "db", "push", "--accept-data-loss"]);
+  run("node", ["scripts/prisma-run.cjs", "generate"]);
+  run("node", ["scripts/prisma-run.cjs", "db", "push", "--accept-data-loss"]);
 } else {
   const dataRoot = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(root, "storage");
   const prismaDir = path.join(dataRoot, "prisma");
@@ -70,8 +70,8 @@ if (isMysql) {
     fs.mkdirSync(d, { recursive: true });
   }
   console.log(`DATABASE_URL=${process.env.DATABASE_URL}`);
-  run("npx", ["prisma", "generate"]);
-  run("npx", ["prisma", "db", "push"]);
+  run("node", ["scripts/prisma-run.cjs", "generate"]);
+  run("node", ["scripts/prisma-run.cjs", "db", "push"]);
 }
 
 process.env.HOSTNAME = "0.0.0.0";

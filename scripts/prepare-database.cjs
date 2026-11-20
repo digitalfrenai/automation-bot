@@ -5,7 +5,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const schemaPath = path.join(__dirname, "..", "prisma", "schema.prisma");
+const prismaDir = path.join(__dirname, "..", "prisma");
+const schemaPath = path.join(prismaDir, "schema.prisma");
+const mysqlSchemaPath = path.join(prismaDir, "schema.mysql.prisma");
+const activeSchemaMarker = path.join(prismaDir, ".active-schema");
 const urlFile = path.join(__dirname, "..", ".cpanel-database.env");
 
 // This host allows index keys up to 1000 bytes. utf8mb4 uses 4 bytes per
@@ -114,25 +117,26 @@ function annotateMysqlStrings(schema) {
     .join("\n");
 }
 
-function writeSchema(provider) {
-  const current = fs.readFileSync(schemaPath, "utf8");
-  let next = current
-    .replace(/provider\s*=\s*"(sqlite|mysql)"/, `provider = "${provider}"`)
+function buildMysqlSchema() {
+  const base = fs.readFileSync(schemaPath, "utf8");
+  let next = base
+    .replace(/provider\s*=\s*"(sqlite|mysql)"/, `provider = "mysql"`)
     .replace(/ @db\.Text/g, "")
     .replace(/ @db\.VarChar\(\d+\)/g, "");
-  if (provider === "mysql") next = annotateMysqlStrings(next);
-  if (next !== current) fs.writeFileSync(schemaPath, next);
+  return annotateMysqlStrings(next);
 }
 
 function main() {
   loadDotEnv();
   const mysqlUrl = resolveMysqlDatabaseUrl();
   if (mysqlUrl) {
-    writeSchema("mysql");
+    fs.writeFileSync(mysqlSchemaPath, buildMysqlSchema());
+    fs.writeFileSync(activeSchemaMarker, "schema.mysql.prisma\n");
     fs.writeFileSync(urlFile, mysqlUrl);
     return;
   }
-  writeSchema("sqlite");
+  if (fs.existsSync(mysqlSchemaPath)) fs.unlinkSync(mysqlSchemaPath);
+  if (fs.existsSync(activeSchemaMarker)) fs.unlinkSync(activeSchemaMarker);
   if (fs.existsSync(urlFile)) fs.unlinkSync(urlFile);
 }
 

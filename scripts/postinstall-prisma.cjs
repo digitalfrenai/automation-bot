@@ -3,9 +3,10 @@
  * Next.js dev (or another Node process) has the query engine DLL open.
  */
 const { spawnSync } = require("child_process");
+const path = require("path");
 
 function runGenerate() {
-  return spawnSync("npx", ["prisma", "generate"], {
+  return spawnSync("node", [path.join(__dirname, "prisma-run.cjs"), "generate"], {
     stdio: "inherit",
     shell: true,
     env: process.env,

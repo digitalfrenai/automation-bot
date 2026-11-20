@@ -45,7 +45,20 @@ On the server (File Manager or SSH into the cPanel app directory):
 
 4. Or set cPanel **Install / Build / Start** commands to the same as the table below and restart the app.
 
-### C. Still only two log lines?
+### C. Worked before, fails on redeploy after MySQL build (log stops at “Pulling the latest source”)
+
+Older builds ran `prepare-database.cjs` and **edited tracked** `prisma/schema.prisma` on the server. The next deploy’s `git pull` then fails because that file is locally modified — cPanel often only shows the two-line log.
+
+**One-time unblock (SSH or cPanel Terminal in the app root):**
+
+```bash
+git checkout -- prisma/schema.prisma
+git pull origin main
+```
+
+Then **Retry Deploy**. Newer commits write MySQL schema to gitignored `prisma/schema.mysql.prisma` instead, so this should not recur.
+
+### D. Still only two log lines?
 
 - cPanel cannot reach GitHub (firewall/DNS) — use ZIP (B).
 - Wrong Git URL or branch name — use **main**, not `master`.
