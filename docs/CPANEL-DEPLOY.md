@@ -73,6 +73,8 @@ Then **Retry Deploy**. Newer commits write MySQL schema to gitignored `prisma/sc
 | **Node.js version** | 22 |
 | **Application root** | Repo root (contains `package.json`) |
 | **Install command** | `npm install && npm run build:cpanel` (must include **devDependencies**) |
+
+If `npm error ENOENT` on `node_modules` during install, the cPanel account may be at its **file (inode) limit** (e.g. 350,000). Free space via File Manager / old apps, or ask the host to raise the limit, then redeploy.
 | **Build command** | *(leave empty)* or `npm run build:cpanel` |
 | **Start command** | `npm start` (runs `node scripts/cpanel-start.cjs`) |
 
