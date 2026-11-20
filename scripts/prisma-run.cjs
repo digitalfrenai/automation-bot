@@ -7,16 +7,16 @@ const fs = require("fs");
 
 const root = path.join(__dirname, "..");
 
-function getSchemaPath() {
+function getSchemaRel() {
   const marker = path.join(root, "prisma", ".active-schema");
   const rel = fs.existsSync(marker)
     ? fs.readFileSync(marker, "utf8").trim()
     : "schema.prisma";
-  return path.join(root, "prisma", rel);
+  return path.join("prisma", rel);
 }
 
 const extra = process.argv.slice(2);
-const args = ["prisma", ...extra, "--schema", getSchemaPath()];
+const args = ["prisma", ...extra, "--schema", getSchemaRel()];
 const r = spawnSync("npx", args, {
   stdio: "inherit",
   shell: true,
