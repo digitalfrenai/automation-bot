@@ -1,44 +1,80 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SINGLE_CONFIG_ID } from "@/lib/site-config";
 
 const DEFAULT_PLATFORMS = ["x", "linkedin", "facebook", "instagram"];
 
-async function repairJsonArrayColumn(
-  configId: string,
-  column: "designReferencePaths" | "socialPlatforms",
-  defaultJson: string
-): Promise<void> {
-  const rows = await prisma.$queryRawUnsafe<
-    Array<Record<string, string | null>>
-  >(
-    `SELECT CAST(${column} AS TEXT) AS col_text FROM SiteConfig WHERE id = ?`,
-    configId
-  );
-  const raw = rows[0]?.col_text;
-  if (raw === null || raw === undefined) return;
+function jsonFieldToString(value: Prisma.JsonValue | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
 
-  const trimmed = String(raw).trim();
-  if (trimmed === "") {
-    await prisma.$executeRawUnsafe(
-      `UPDATE SiteConfig SET ${column} = ? WHERE id = ?`,
-      defaultJson,
-      configId
-    );
-    return;
+function coerceStringArray(value: Prisma.JsonValue | null | undefined): string[] | null {
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) {
+    return value.filter((p): p is string => typeof p === "string");
   }
+
+  const trimmed = jsonFieldToString(value).trim();
+  if (trimmed === "") return [];
 
   try {
     const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed)) return;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((p): p is string => typeof p === "string");
+    }
   } catch {
-    /* fall through */
+    try {
+      const wrapped = JSON.parse(`[${trimmed}]`);
+      if (Array.isArray(wrapped)) {
+        return wrapped.filter((p): p is string => typeof p === "string");
+      }
+    } catch {
+      /* invalid */
+    }
+  }
+  return null;
+}
+
+async function repairDesignReferencePaths(configId: string): Promise<void> {
+  const row = await prisma.siteConfig.findUnique({
+    where: { id: configId },
+    select: { designReferencePaths: true },
+  });
+  if (!row) return;
+
+  const coerced = coerceStringArray(row.designReferencePaths);
+  if (coerced !== null) return;
+
+  await prisma.siteConfig.update({
+    where: { id: configId },
+    data: { designReferencePaths: [] },
+  });
+}
+
+async function repairSocialPlatforms(configId: string): Promise<void> {
+  const row = await prisma.siteConfig.findUnique({
+    where: { id: configId },
+    select: { socialPlatforms: true },
+  });
+  if (!row) return;
+
+  const coerced = coerceStringArray(row.socialPlatforms);
+  if (coerced !== null) {
+    if (coerced.length === 0) {
+      await prisma.siteConfig.update({
+        where: { id: configId },
+        data: { socialPlatforms: DEFAULT_PLATFORMS },
+      });
+    }
+    return;
   }
 
-  await prisma.$executeRawUnsafe(
-    `UPDATE SiteConfig SET ${column} = ? WHERE id = ?`,
-    defaultJson,
-    configId
-  );
+  await prisma.siteConfig.update({
+    where: { id: configId },
+    data: { socialPlatforms: DEFAULT_PLATFORMS },
+  });
 }
 
 /**
@@ -48,62 +84,13 @@ export async function ensureSiteConfigJsonIntegrity(
   configId: string = SINGLE_CONFIG_ID
 ): Promise<void> {
   try {
-    await repairJsonArrayColumn(configId, "designReferencePaths", "[]");
+    await repairDesignReferencePaths(configId);
   } catch (err) {
     console.error("[ensureSiteConfigJsonIntegrity] designReferencePaths", err);
   }
 
   try {
-    const rows = await prisma.$queryRawUnsafe<
-      Array<{ socialPlatforms_text: string | null }>
-    >(
-      `SELECT CAST(socialPlatforms AS TEXT) AS socialPlatforms_text
-       FROM SiteConfig WHERE id = ?`,
-      configId
-    );
-    const raw = rows[0]?.socialPlatforms_text;
-    if (raw === null || raw === undefined) return;
-
-    let needsFix = false;
-    let fixed: string[] = DEFAULT_PLATFORMS;
-
-    const trimmed = String(raw).trim();
-    if (trimmed === "") {
-      needsFix = true;
-      fixed = DEFAULT_PLATFORMS;
-    } else {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) {
-          fixed = parsed.filter((p): p is string => typeof p === "string");
-          if (fixed.length === 0) {
-            fixed = DEFAULT_PLATFORMS;
-            needsFix = true;
-          }
-        } else {
-          needsFix = true;
-        }
-      } catch {
-        needsFix = true;
-        try {
-          const wrapped = JSON.parse(`[${trimmed}]`);
-          if (Array.isArray(wrapped)) {
-            fixed = wrapped.filter((p): p is string => typeof p === "string");
-          }
-        } catch {
-          fixed = DEFAULT_PLATFORMS;
-        }
-        if (fixed.length === 0) fixed = DEFAULT_PLATFORMS;
-      }
-    }
-
-    if (needsFix) {
-      await prisma.$executeRawUnsafe(
-        `UPDATE SiteConfig SET socialPlatforms = ? WHERE id = ?`,
-        JSON.stringify(fixed),
-        configId
-      );
-    }
+    await repairSocialPlatforms(configId);
   } catch (err) {
     console.error("[ensureSiteConfigJsonIntegrity]", err);
   }
