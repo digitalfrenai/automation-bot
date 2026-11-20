@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "node scripts/prepare-database.cjs && node scripts/prisma-run.cjs generate && next build",
+    "build:cpanel": "node scripts/cpanel-build.cjs",
     "start": "node scripts/cpanel-start.cjs",
     "start:docker": "sh scripts/docker-entrypoint.sh",
     "start:server": "next start -H 0.0.0.0",

@@ -19,9 +19,33 @@ function run(cmd, args, opts = {}) {
 }
 
 const root = path.join(__dirname, "..");
+const BUILD_STAMP = "mysql-json-repair-v1";
+const stampPath = path.join(root, ".cpanel-build-stamp");
+
 process.chdir(root);
 
 console.log("=== wordpress-bot startup (cpanel) ===");
+
+spawnSync("git", ["checkout", "--", "prisma/schema.prisma"], {
+  stdio: "pipe",
+  cwd: root,
+});
+
+if (fs.existsSync(stampPath)) {
+  console.log(`Build stamp: ${fs.readFileSync(stampPath, "utf8").trim()}`);
+} else {
+  console.warn(
+    `WARNING: missing .cpanel-build-stamp — set Build command to: npm run build:cpanel`
+  );
+}
+
+if (
+  !fs.existsSync(stampPath) ||
+  fs.readFileSync(stampPath, "utf8").trim() !== BUILD_STAMP
+) {
+  console.log("Running production build (stale or missing stamp) …");
+  run("node", ["scripts/cpanel-build.cjs"]);
+}
 
 run("node", ["scripts/prepare-database.cjs"]);
 
