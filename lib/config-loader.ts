@@ -1,6 +1,5 @@
 import type { SiteConfig } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { ensureSiteConfigJsonIntegrity } from "@/lib/repair-site-config";
 import { parseStringArray } from "@/lib/site-config";
 
 export type SiteLogoConfigFields = {
@@ -29,8 +28,6 @@ function readLogoFields(config: SiteConfig): SiteLogoConfigFields {
 export async function loadSiteConfig(
   configId: string
 ): Promise<LoadedSiteConfig> {
-  await ensureSiteConfigJsonIntegrity(configId);
-
   const config = await prisma.siteConfig.findUnique({ where: { id: configId } });
   if (!config) {
     throw new Error(`Site configuration not found for id "${configId}".`);

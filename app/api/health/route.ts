@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const HEALTH_MARKER = "2026-09-23-railway-v2";
+const HEALTH_MARKER = "2026-11-20-cpanel-mysql-v1";
 
 function redactDatabaseUrl(url: string): string {
   return url.replace(/^(mysqls?:\/\/)([^@/]+)@/i, "$1***@");
@@ -55,6 +55,16 @@ export async function GET() {
   const mysql = /^mysqls?:\/\//i.test(databaseUrl);
   const ready = mysql ? dbQueryOk : dirWritable && dbQueryOk;
 
+  const stampPath = path.join(process.cwd(), ".cpanel-build-stamp");
+  let buildStamp: string | null = null;
+  try {
+    if (fs.existsSync(stampPath)) {
+      buildStamp = fs.readFileSync(stampPath, "utf8").trim();
+    }
+  } catch {
+    buildStamp = null;
+  }
+
   // Railway (and similar) treat non-2xx health checks as failure and SIGTERM the container.
   // Always return 200 when this handler runs; use `ready` for DB/volume diagnostics.
   return NextResponse.json(
@@ -62,6 +72,7 @@ export async function GET() {
       ok: true,
       ready,
       marker: HEALTH_MARKER,
+      buildStamp,
       gitCommit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
       railwayVolumeMount: process.env.RAILWAY_VOLUME_MOUNT_PATH ?? null,
       databaseUrl: redactDatabaseUrl(databaseUrl),

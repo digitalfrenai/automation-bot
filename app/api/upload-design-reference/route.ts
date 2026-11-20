@@ -8,7 +8,6 @@ import {
   getDesignReferenceUploadDir,
 } from "@/lib/design-reference-storage";
 import { designReferenceMaxCount } from "@/lib/design-reference-vision";
-import { ensureSiteConfigJsonIntegrity } from "@/lib/repair-site-config";
 import { parseStringArray, SINGLE_CONFIG_ID } from "@/lib/site-config";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -54,8 +53,6 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-
-    await ensureSiteConfigJsonIntegrity(SINGLE_CONFIG_ID);
 
     const replace =
       formData.get("replace") === "true" || formData.get("replace") === "1";
@@ -123,8 +120,6 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    await ensureSiteConfigJsonIntegrity(SINGLE_CONFIG_ID);
-
     const existing = await prisma.siteConfig.findUnique({
       where: { id: SINGLE_CONFIG_ID },
     });

@@ -72,8 +72,8 @@ Then **Retry Deploy**. Newer commits write MySQL schema to gitignored `prisma/sc
 |--------|--------|
 | **Node.js version** | 22 |
 | **Application root** | Repo root (contains `package.json`) |
-| **Install command** | `npm install` (must include **devDependencies** for build) |
-| **Build command** | `npm run build:cpanel` (clean `.next` + fixes `schema.prisma` git drift) |
+| **Install command** | `npm install && npm run build:cpanel` (must include **devDependencies**) |
+| **Build command** | *(leave empty)* or `npm run build:cpanel` |
 | **Start command** | `npm start` (runs `node scripts/cpanel-start.cjs`) |
 
 Do **not** use `npm install --production` before `npm run build` — `prisma`, `typescript`, and `tailwindcss` are required to build.

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureSiteConfigJsonIntegrity } from "@/lib/repair-site-config";
 import {
   DEFAULT_PAGES,
   SINGLE_CONFIG_ID,
@@ -48,8 +47,6 @@ function buildConfigData(body: SiteConfigInput) {
 
 export async function GET() {
   try {
-    await ensureSiteConfigJsonIntegrity(SINGLE_CONFIG_ID);
-
     const config = await prisma.siteConfig.findUnique({
       where: { id: SINGLE_CONFIG_ID },
     });

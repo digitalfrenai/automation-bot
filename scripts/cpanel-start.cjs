@@ -19,7 +19,7 @@ function run(cmd, args, opts = {}) {
 }
 
 const root = path.join(__dirname, "..");
-const BUILD_STAMP = "mysql-json-repair-v1";
+const BUILD_STAMP = "mysql-json-repair-v2";
 const stampPath = path.join(root, ".cpanel-build-stamp");
 
 process.chdir(root);

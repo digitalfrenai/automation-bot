@@ -1,6 +1,5 @@
 import { loadSiteConfig } from "@/lib/config-loader";
 import { prisma } from "@/lib/prisma";
-import { ensureSiteConfigJsonIntegrity } from "@/lib/repair-site-config";
 import {
   publishToSocialPlatform,
   type SocialPlatform,
@@ -10,8 +9,6 @@ import { SINGLE_CONFIG_ID } from "@/lib/site-config";
 
 /** Phase 8 — aggregated management snapshot for the dashboard. */
 export async function getManagementOverview(configId = SINGLE_CONFIG_ID) {
-  await ensureSiteConfigJsonIntegrity(configId);
-
   const config = await prisma.siteConfig.findUnique({
     where: { id: configId },
   });

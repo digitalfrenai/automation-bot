@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const BUILD_STAMP = "mysql-json-repair-v1";
+const BUILD_STAMP = "mysql-json-repair-v2";
 
 process.chdir(root);
 
