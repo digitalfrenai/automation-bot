@@ -20,6 +20,10 @@ pnpm-workspace.yaml
 # production
 /build
 
+# cpanel bundle output
+/automation-bot-cpanel.zip
+.cpanel-bundle-staging/
+
 # misc
 .DS_Store
 *.pem

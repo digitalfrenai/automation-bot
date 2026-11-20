@@ -12,7 +12,8 @@
     "lint": "eslint",
     "postinstall": "node scripts/postinstall-prisma.cjs",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "bundle:cpanel": "node scripts/make-cpanel-bundle.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.16.0",
